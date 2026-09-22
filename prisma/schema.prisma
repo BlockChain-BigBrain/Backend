@@ -33,9 +33,18 @@ enum TransactionStatus {
   FAILED
 }
 
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
 model User {
   id            Int            @id @default(autoincrement())
-  googleId      String         @unique
+  refreshTokenHash String?        @db.VarChar(64)
+  googleId      String?        @unique
+  provider      AuthProvider   @default(GOOGLE)
+  passwordHash  String?
+  preferredLanguage String    @default("ko")
   email         String         @unique
   name          String
   profileImage   String?

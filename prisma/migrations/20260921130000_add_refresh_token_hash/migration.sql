@@ -1,0 +1,1 @@
+ALTER TABLE `User` ADD COLUMN `refreshTokenHash` VARCHAR(64) NULL;
