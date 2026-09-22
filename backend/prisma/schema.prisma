@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContributionRole {
+  PROMPT
+  EDIT
+  COMPOSER
+  VOCAL
+  PRODUCER
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum LicenseType {
+  PERSONAL
+  COMMERCIAL
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  googleId      String         @unique
+  email         String         @unique
+  name          String
+  profileImage   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tracks        Track[]        @relation("TrackOwner")
+  contributions Contribution[]
+  licenses      License[]
+  transactions  Transaction[]
+}
+
+model Track {
+  id                Int                @id @default(autoincrement())
+  title             String
+  prompt            String?            @db.Text
+  workLog           String?            @db.Text
+  audioPath         String
+  mimeType          String
+  ownerId           Int
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  owner             User               @relation("TrackOwner", fields: [ownerId], references: [id])
+  contributions     Contribution[]
+  verifications     Verification[]
+  similarityResults SimilarityResult[]
+  licenses          License[]
+  transactions      Transaction[]
+}
+
+model Contribution {
+  id         Int              @id @default(autoincrement())
+  trackId    Int
+  userId     Int
+  role       ContributionRole
+  percentage Decimal          @db.Decimal(5, 2)
+  track      Track            @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id])
+
+  @@unique([trackId, userId, role])
+}
+
+model Verification {
+  id          Int                @id @default(autoincrement())
+  trackId     Int
+  status      VerificationStatus @default(PENDING)
+  fingerprint String?            @db.Text
+  message     String?            @db.Text
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  track       Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
+}
+
+model SimilarityResult {
+  id          Int      @id @default(autoincrement())
+  trackId     Int
+  comparedUrl String?
+  score       Decimal  @db.Decimal(5, 4)
+  createdAt   DateTime @default(now())
+  track       Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+}
+
+model License {
+  id           Int           @id @default(autoincrement())
+  trackId      Int
+  buyerId      Int
+  type         LicenseType
+  price        Decimal       @db.Decimal(12, 2)
+  createdAt    DateTime      @default(now())
+  track        Track         @relation(fields: [trackId], references: [id])
+  buyer        User          @relation(fields: [buyerId], references: [id])
+  transactions Transaction[]
+}
+
+model Transaction {
+  id        Int               @id @default(autoincrement())
+  trackId   Int
+  userId    Int
+  licenseId Int?
+  amount    Decimal           @db.Decimal(12, 2)
+  status    TransactionStatus @default(PENDING)
+  txHash    String?
+  createdAt DateTime          @default(now())
+  track     Track             @relation(fields: [trackId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+  license   License?          @relation(fields: [licenseId], references: [id])
+}
