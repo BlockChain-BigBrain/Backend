@@ -67,15 +67,18 @@ Auth 성공 응답은 `{ isSuccess: true, code: "COMMON200", message: "요청에
 로그인·갱신의 result는 `{ accessToken }`, 회원가입·내 정보는 `{ id, email, nickname }`, 로그아웃은 HTTP 200과 `result: null`입니다.
 기존 `POST /api/v1/auth/google` ID-token API는 리디렉션 흐름으로 대체했습니다.
 
-Access JWT는 기본 1시간, refresh JWT는 기본 14일입니다. `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`으로 변경할 수 있습니다.
+Access JWT는 기본 15분, refresh JWT는 기본 14일입니다. `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`으로 변경할 수 있습니다.
 `JWT_ACCESS_SECRET`과 `JWT_REFRESH_SECRET`은
 각각 `openssl rand -hex 64`로 생성합니다. 비밀번호는 bcrypt(비용 12), refresh JWT는 전체 토큰의 SHA-256 값을 bcrypt(비용 12)로 해싱하여 DB에 저장하며,
 매 재발급 시 원자적으로 교체합니다. 새 로그인은 해당 사용자의 이전 refresh token을 무효화합니다.
 로그아웃해도 기존 access token은 설정된 만료 시점까지 유효합니다.
 
-`COOKIE_SECURE=true`는 HTTPS 배포에서 사용합니다. refresh 쿠키는 SameSite=Strict이므로
-프론트와 백엔드는 같은 사이트에 배포해야 합니다. 로컬에서는 둘 다 localhost를 사용하세요.
-CORS는 FRONTEND_URL 한 원본에 credentials를 허용합니다.
+`NODE_ENV=production`이면 Secure 쿠키를 강제합니다. 그 외 환경은 `COOKIE_SECURE`를 따릅니다.
+Secure refresh 쿠키는 HttpOnly / SameSite=None으로 GitHub Pages와 Render 사이 요청을 지원합니다.
+HTTP 로컬 개발에서는 COOKIE_SECURE=false, SameSite=Strict를 사용하고 양쪽 모두 localhost를 사용하세요.
+CORS는 FRONTEND_URL에서 추출한 단일 origin에 credentials를 허용합니다. refresh/login/logout은 요청 Origin도 검사합니다.
+프론트의 로그인·refresh·logout 요청은 `credentials: "include"`가 필요합니다.
+브라우저의 타사 쿠키 차단 정책까지 서버 설정으로 해제할 수는 없습니다. 이 경우 동일 사이트 도메인 구성 등을 별도로 검토해야 합니다.
 OAuth state는 10분짜리 서버 메모리와 HttpOnly/Lax 쿠키로 검증합니다.
 서버 재시작 시 진행 중인 로그인은 다시 시작해야 하며, 여러 인스턴스 배포 시 공유 세션 저장소가 필요합니다.
 
@@ -118,3 +121,18 @@ DB 마이그레이션은 기존 Google 계정과 음원 관계를 보존하며 �
 이 명령은 로컬 개발 DB에서만 실행되며, 기존 계정의 비밀번호를 변경하지 않습니다.
 
 프론트는 Google 로그인 시작·refresh·logout에 `target=frontend`를 보내 전용 `frontendRefreshToken` 쿠키를 사용합니다. Swagger의 기본 `refreshToken` 쿠키는 프론트에서 복원하지 않습니다. 이 변경 후 프론트는 한 번 다시 Google 로그인이 필요합니다.
+
+## JWT 로그인 유지 흐름
+
+Google OAuth의 refresh token은 사용하지 않습니다(`access_type=online`). 자체 JWT refresh token의 해시를 기존 User.refreshTokenHash에 저장합니다.
+Access JWT는 사용자 ID를 표준 `sub` 클레임에 담고, 기존 requireAuth가 이를 req.userId로 변환합니다. 이메일은 JWT에서 제거했으며 `/api/v1/auth/me`에서 조회합니다.
+
+1. 프론트는 Google 로그인 시작 URL에 `target=frontend`와 `redirectTo=/Frontend/?login=success`를 전달합니다.
+2. callback에서 사용자 확인/생성 및 JWT 쌍 발급 후, refresh token만 HttpOnly 쿠키에 설정하고 프론트로 이동합니다. URL에는 토큰을 넣지 않습니다.
+3. 프론트가 `POST /api/v1/auth/refresh?target=frontend`를 credentials 포함으로 호출하면 `{ result: { accessToken } }`을 받습니다. 쿠키도 기존 방식대로 교체됩니다.
+4. Access Token은 메모리에 보관하고 Authorization: Bearer 헤더에 넣습니다. 새로고침 또는 만료(401) 시 refresh를 호출한 뒤 원래 요청을 한 번 재시도합니다. refresh 자체가 401이면 재로그인이 필요합니다.
+5. `POST /api/v1/auth/logout?target=frontend`는 DB의 refresh 해시를 폐기하고 같은 쿠키 옵션으로 쿠키를 삭제합니다. DB 장애 시에도 브라우저 쿠키는 지우지만 서버 폐기 실패 응답을 유지합니다.
+
+`target` 없는 기존 API/Swagger는 refreshToken 쿠키를 계속 사용합니다. 프론트는 frontendRefreshToken 쿠키를 사용하므로 target을 일관되게 전달해야 합니다.
+기존 사용자당 하나의 refresh 해시 및 rotation 구조를 유지합니다. 새 로그인은 이전 세션을 무효화하며 멀티 기기 세션 시스템은 추가하지 않았습니다.
+실제 환경 변수가 설정돼 있으면 기본 15분보다 해당 JWT_ACCESS_EXPIRES_IN 값이 우선합니다.

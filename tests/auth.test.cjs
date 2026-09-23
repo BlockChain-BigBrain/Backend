@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+process.env.JWT_ACCESS_EXPIRES_IN = '15m';
+process.env.JWT_REFRESH_EXPIRES_IN = '14d';
 process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.GOOGLE_CLIENT_ID = 'test-client';
@@ -30,7 +32,7 @@ function fixture() {
 }
 function response() {
   return { cookies: {}, cleared: [], headers: {}, cookie(n,v,o){ this.cookies[n] = {value:v, options:o}; return this; },
-    clearCookie(n){ this.cleared.push(n); return this; }, setHeader(n,v){ this.headers[n]=v; },
+    clearCookie(n,o){ this.cleared.push(n); this.clearOptions = o; return this; }, setHeader(n,v){ this.headers[n]=v; },
     redirect(url){ this.location=url; }, json(body){this.body=body;}, status(code){this.code=code;return this;},end(){} };
 }
 test('refresh rotation uses unique tokens and rejects replay, including concurrent requests', async () => {
@@ -126,7 +128,7 @@ test('local signup normalizes identity, hashes passwords and rejects duplicates'
   const pair = await service.logIn(input);
   const payload = jwt.verify(pair.accessToken, process.env.JWT_ACCESS_SECRET);
   assert.equal(payload.sub, '2');
-  assert.equal(payload.exp - payload.iat, 3600);
+  assert.equal(payload.exp - payload.iat, 900);
   assert.ok(stored.refreshTokenHash);
   stored.provider = 'GOOGLE';
   await assert.rejects(service.logIn(input), { statusCode: 401 });
@@ -232,4 +234,37 @@ test('GitHub Pages OAuth success and denial return to the existing base page', a
     if (denied) assert.equal(url.searchParams.get('reason'),'ACCESS_DENIED');
     else assert.ok(done.cookies.frontendRefreshToken);
   }
+});
+
+test('service JWTs carry minimal claims and reject expired or forged refresh tokens', async () => {
+  const {service}=fixture(); const pair=await service.completeGoogleLogin('code');
+  const access=jwt.verify(pair.accessToken,process.env.JWT_ACCESS_SECRET);
+  const refresh=jwt.verify(pair.refreshToken,process.env.JWT_REFRESH_SECRET);
+  assert.deepEqual(Object.keys(access).sort(),['exp','iat','sub','tokenType']);
+  assert.equal(access.sub,'1');assert.equal(access.exp-access.iat,900);
+  assert.equal(refresh.exp-refresh.iat,14*86400);assert.ok(refresh.jti);
+  for (const token of [undefined,'bad',jwt.sign({sub:'1',tokenType:'refresh'},process.env.JWT_REFRESH_SECRET,{expiresIn:-1}),jwt.sign({sub:'1',tokenType:'refresh'},'wrong-secret',{expiresIn:60})]) {
+    await assert.rejects(service.refresh(token),{statusCode:401});
+  }
+  const expired=jwt.sign({sub:'1',tokenType:'access'},process.env.JWT_ACCESS_SECRET,{expiresIn:-1});
+  requireAuth({headers:{authorization:`Bearer ${expired}`}}, {}, error=>assert.equal(error.statusCode,401));
+  const next=await service.refresh(pair.refreshToken);
+  const req={headers:{authorization:`Bearer ${next.accessToken}`}};
+  requireAuth(req,{},error=>assert.equal(error,undefined));assert.equal(req.userId,1);
+});
+
+test('frontend password login uses the same cookie as refresh and logout', async () => {
+  const controller=new AuthController({logIn:async()=>({accessToken:'access',refreshToken:'refresh'})});
+  const res=response();
+  await controller.logIn({query:{target:'frontend'},headers:{origin:'http://localhost:3000'},body:{email:'a@example.com',password:'password123'}},res);
+  assert.ok(res.cookies.frontendRefreshToken);assert.equal(res.cookies.refreshToken,undefined);
+  assert.deepEqual(res.body.result,{accessToken:'access'});
+});
+
+test('logout clears the cookie with matching options even when database revocation fails', async () => {
+  const controller=new AuthController({logout:async()=>{throw new Error('database unavailable');}});
+  const res=response();
+  await assert.rejects(controller.logout({query:{target:'frontend'},headers:{origin:'http://localhost:3000'}},res));
+  assert.deepEqual(res.cleared,['frontendRefreshToken']);
+  assert.deepEqual(res.clearOptions,{httpOnly:true,secure:true,sameSite:'none',path:'/api/v1/auth'});
 });

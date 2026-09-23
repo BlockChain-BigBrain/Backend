@@ -10,7 +10,10 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "test": "npm run build && node --test tests/*.test.cjs",
-    "prisma:seed:example": "node prisma/seed-example.cjs"
+    "prisma:seed:example": "node prisma/seed-example.cjs",
+    "test:local": "npm run build && node scripts/test-local-flow.cjs",
+    "db:check": "node scripts/check-database.cjs",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",

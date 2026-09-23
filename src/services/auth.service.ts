@@ -10,7 +10,7 @@ import { AppError } from "../utils/errors";
 export const refreshMaxAge = config.refreshExpiresIn * 1000;
 // Prehash the whole JWT so bcrypt's 72-byte limit cannot truncate its signature/jti.
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
-type TokenUser = { id: number; email: string };
+type TokenUser = { id: number };
 
 export class AuthService {
   constructor(private readonly users: UserRepository, private readonly google = new OAuth2Client(
@@ -65,7 +65,7 @@ export class AuthService {
   private issueTokens(user: TokenUser) {
     if (!config.jwtSecret || !config.jwtRefreshSecret) throw new AppError(503, "JWT secrets must be configured");
     return {
-      accessToken: jwt.sign({ sub: String(user.id), email: user.email, tokenType: "access" }, config.jwtSecret,
+      accessToken: jwt.sign({ sub: String(user.id), tokenType: "access" }, config.jwtSecret,
         { algorithm: "HS256", expiresIn: config.accessExpiresIn }),
       refreshToken: jwt.sign({ sub: String(user.id), tokenType: "refresh" }, config.jwtRefreshSecret,
         { algorithm: "HS256", expiresIn: config.refreshExpiresIn, jwtid: randomUUID() }),

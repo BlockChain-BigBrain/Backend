@@ -36,7 +36,7 @@ export class AuthController {
     this.checkOrigin(req);
     res.setHeader("Cache-Control", "no-store");
     const pair = await this.auth.logIn(validateCredentials(req.body));
-    this.setRefresh(res, pair.refreshToken);
+    this.setRefresh(res, pair.refreshToken, req.query?.target === "frontend");
     res.json(success({ accessToken: pair.accessToken }));
   };
 
@@ -97,9 +97,12 @@ export class AuthController {
   logout = async (req: Request, res: Response) => {
     this.checkOrigin(req);
     const cookieName = req.query?.target === "frontend" ? "frontendRefreshToken" : "refreshToken";
-    await this.auth.logout(readCookie(req, cookieName));
-    res.clearCookie(cookieName, refreshOptions);
     res.setHeader("Cache-Control", "no-store");
+    try {
+      await this.auth.logout(readCookie(req, cookieName));
+    } finally {
+      res.clearCookie(cookieName, refreshOptions);
+    }
     res.json(success(null));
   };
   me = async (req: AuthenticatedRequest, res: Response) => {

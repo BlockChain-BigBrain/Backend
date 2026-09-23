@@ -118,7 +118,7 @@ export const swaggerSpec = {
         ],
         responses: { "302": { description: "로그인 결과 페이지로 이동. 성공 시 refreshToken Cookie 설정", headers: {
           Location: { schema: { type: "string" }, description: "프론트 콜백 또는 /api-docs/" },
-          "Set-Cookie": { schema: { type: "string" }, example: "refreshToken=<token>; Path=/api/v1/auth; HttpOnly; SameSite=Strict" },
+          "Set-Cookie": { schema: { type: "string" }, example: "refreshToken=<token>; Path=/api/v1/auth; HttpOnly; Secure; SameSite=None" },
         } } },
       },
     },
