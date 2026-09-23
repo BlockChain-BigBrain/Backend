@@ -19,3 +19,26 @@ test('logs only the event and allowlisted diagnostic fields', () => {
   finally { console.error = previous; }
   assert.deepEqual(JSON.parse(lines[0]), {event:'google_login_failed',type:'Error',code:'P2022',reason:'database_column_missing'});
 });
+
+test('initialization failures without Prisma codes are classified without disclosing messages', () => {
+  for (const [message, reason] of [
+    ["Can't reach database server at private-host:3306", 'database_unreachable'],
+    ['Authentication failed for private-user', 'database_authentication_failed'],
+    ['Unable to load libquery_engine for private-path', 'database_engine_runtime_error'],
+    ['TLS certificate error for private-host', 'database_tls_error'],
+  ]) {
+    const result = errorSummary({name:'PrismaClientInitializationError',message});
+    assert.equal(result.reason,reason);
+    assert.equal(JSON.stringify(result).includes('private-'),false);
+  }
+});
+
+test('database configuration summary does not expose host, credentials or database name', () => {
+  const {databaseConfigSummary} = require('../dist/utils/errorLogger');
+  const result = databaseConfigSummary('mysql://private-user:private-password@localhost:3306/private-database');
+  assert.equal(result.loopback,true);assert.equal(result.mysql,true);
+  assert.equal(JSON.stringify(result).includes('private-'),false);
+  assert.equal(databaseConfigSummary('mysql://u:p@remote.example/db').loopback,false);
+  assert.equal(databaseConfigSummary('invalid').validUrl,false);
+  assert.equal(databaseConfigSummary(undefined).configured,false);
+});
