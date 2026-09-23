@@ -1,3 +1,4 @@
+import { logServerError } from "../utils/errorLogger";
 import { validateCredentials } from "../dto/auth.dto";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { Request, Response, CookieOptions } from "express";
@@ -67,7 +68,10 @@ export class AuthController {
       const pair = await this.auth.completeGoogleLogin(req.query.code);
       this.setRefresh(res, pair.refreshToken, session.frontend);
       res.redirect(session.swagger ? "/api-docs/?login=success" : new URL(session.redirect, config.frontendUrl).toString());
-    } catch { this.fail(res, "AUTH_FAILED", session.swagger, session.redirect); }
+    } catch (error) {
+      logServerError("google_login_failed", error);
+      this.fail(res, "AUTH_FAILED", session.swagger, session.redirect);
+    }
   };
 
   private fail(res: Response, reason: string, swagger = false, redirect?: string) {

@@ -1,4 +1,5 @@
 import cors from "cors";
+import { logServerError } from "./utils/errorLogger";
 import express, { NextFunction, Request, Response } from "express";
 import swaggerUi from "swagger-ui-express";
 import path from "node:path";
@@ -34,6 +35,7 @@ app.use("/api/tracks", createTrackRoutes(trackController));
 app.get("/api/me", requireAuth, (req, res) => res.json({ userId: (req as Request & { userId?: number }).userId }));
 app.use((error: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
   const statusCode = error.statusCode ?? 500;
+  if (statusCode >= 500) logServerError(_req.path === "/api/tracks" || _req.path === "/api/tracks/" ? "tracks_request_failed" : "http_request_failed", error);
   if (_req.path.startsWith("/api/v1/auth/")) {
     res.status(statusCode).json({ isSuccess: false, code: `COMMON${statusCode}`, message: statusCode === 500 ? "Internal server error" : error.message, result: null });
     return;
