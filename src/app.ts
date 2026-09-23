@@ -24,6 +24,9 @@ app.use(express.json());
 app.use("/uploads", express.static(path.resolve(config.uploadDir)));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { swaggerOptions: { persistAuthorization: false } }));
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/google08be8fbfab8fe440.html", (_req, res) => {
+  res.sendFile(path.resolve(__dirname, "../public/google08be8fbfab8fe440.html"));
+});
 // Keep the old OAuth redirect URI working while provider settings are updated.
 app.get("/api/auth/callback/google", (req, res) => res.redirect(307, `/api/v1/auth/callback/google${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`));
 app.use("/api/v1/auth", createAuthRoutes(authController));
