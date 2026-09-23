@@ -4,6 +4,7 @@ process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.GOOGLE_CLIENT_ID = 'test-client';
 process.env.GOOGLE_CLIENT_SECRET = 'test-secret';
+process.env.COOKIE_SECURE = 'true';
 process.env.FRONTEND_URL = 'http://localhost:3000';
 const jwt = require('jsonwebtoken');
 const { AuthService } = require('../dist/services/auth.service');
@@ -68,7 +69,7 @@ test('OAuth callback binds state to browser, consumes it, and only sends refresh
   const done=response(); await controller.callbackGoogle(req,done);
   assert.equal(done.location,'http://localhost:3000/dashboard');
   assert.equal(done.cookies.refreshToken.options.httpOnly,true);
-  assert.equal(done.cookies.refreshToken.options.sameSite,'strict');
+  assert.equal(done.cookies.refreshToken.options.sameSite,'none');
   assert.equal(done.body,undefined);
   const replay=response(); await controller.callbackGoogle(req,replay);
   assert.match(replay.location,/INVALID_STATE/);
@@ -203,4 +204,32 @@ test('frontend Google login sets only the frontend session cookie', async () => 
   assert.ok(done.cookies.frontendRefreshToken);
   assert.equal(done.cookies.refreshToken,undefined);
   assert.equal(done.location,'http://localhost:3000/auth/callback');
+});
+
+
+test('trusted cross-site frontend can refresh but foreign and missing origins cannot', async () => {
+  const controller = new AuthController({refresh: async () => ({accessToken:'access',refreshToken:'refresh'})});
+  const req = {query:{target:'frontend'},headers:{origin:'http://localhost:3000','sec-fetch-site':'cross-site'}};
+  const renewed = response();
+  await controller.refresh(req, renewed);
+  assert.equal(renewed.cookies.frontendRefreshToken.options.sameSite, 'none');
+  assert.equal(renewed.cookies.frontendRefreshToken.options.secure, true);
+  for (const origin of ['https://evil.test', 'null', undefined]) {
+    await assert.rejects(controller.refresh({...req,headers:{...req.headers,origin}},response()),{statusCode:403});
+  }
+});
+
+test('GitHub Pages OAuth success and denial return to the existing base page', async () => {
+  const {service} = fixture(); const controller = new AuthController(service);
+  for (const denied of [false, true]) {
+    const start = response();
+    await controller.startGoogle({headers:{},query:{target:'frontend',redirectTo:'/Frontend/?login=success'}},start);
+    const state = start.cookies.oauthState.value; const done = response();
+    await controller.callbackGoogle({headers:{cookie:`oauthState=${state}`},query:{state,...(denied ? {error:'access_denied'} : {code:'code'})}},done);
+    const url = new URL(done.location);
+    assert.equal(url.pathname, '/Frontend/');
+    assert.equal(url.origin, 'http://localhost:3000');
+    if (denied) assert.equal(url.searchParams.get('reason'),'ACCESS_DENIED');
+    else assert.ok(done.cookies.frontendRefreshToken);
+  }
 });

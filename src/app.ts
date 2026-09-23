@@ -19,7 +19,7 @@ const app = express();
 const authController = new AuthController(new AuthService(new UserRepository(prisma)));
 const trackController = new TrackController(new TrackService(new TrackRepository(prisma), prisma));
 
-app.use(cors({ origin: config.frontendUrl, credentials: true }));
+app.use(cors({ origin: new URL(config.frontendUrl).origin, credentials: true }));
 app.use(express.json());
 app.use("/uploads", express.static(path.resolve(config.uploadDir)));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { swaggerOptions: { persistAuthorization: false } }));

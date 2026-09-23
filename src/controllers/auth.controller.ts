@@ -7,7 +7,7 @@ import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { AppError } from "../utils/errors";
 
 const authPath = "/api/v1/auth";
-const refreshOptions: CookieOptions = { httpOnly: true, secure: config.cookieSecure, sameSite: "strict", path: authPath };
+const refreshOptions: CookieOptions = { httpOnly: true, secure: config.cookieSecure, sameSite: config.cookieSecure ? "none" : "strict", path: authPath };
 const stateOptions: CookieOptions = { httpOnly: true, secure: config.cookieSecure, sameSite: "lax", path: "/api" };
 export function readCookie(req: Request, name: string): string | undefined {
   const values = req.headers.cookie?.split(";").map(part => part.trim()).filter(part => part.startsWith(`${name}=`));
@@ -60,21 +60,25 @@ export class AuthController {
     res.clearCookie("oauthState", stateOptions);
     const valid = cookie && /^[a-f0-9]{64}$/.test(state) && cookie.length === state.length
       && timingSafeEqual(Buffer.from(cookie), Buffer.from(state)) && session && session.expires > Date.now();
-    if (!valid) return this.fail(res, "INVALID_STATE", session?.swagger);
-    if (req.query.error) return this.fail(res, req.query.error === "access_denied" ? "ACCESS_DENIED" : "AUTH_FAILED", session.swagger);
-    if (typeof req.query.code !== "string" || !req.query.code) return this.fail(res, "AUTH_FAILED", session.swagger);
+    if (!valid) return this.fail(res, "INVALID_STATE", session?.swagger, session?.redirect);
+    if (req.query.error) return this.fail(res, req.query.error === "access_denied" ? "ACCESS_DENIED" : "AUTH_FAILED", session.swagger, session.redirect);
+    if (typeof req.query.code !== "string" || !req.query.code) return this.fail(res, "AUTH_FAILED", session.swagger, session.redirect);
     try {
       const pair = await this.auth.completeGoogleLogin(req.query.code);
       this.setRefresh(res, pair.refreshToken, session.frontend);
       res.redirect(session.swagger ? "/api-docs/?login=success" : new URL(session.redirect, config.frontendUrl).toString());
-    } catch { this.fail(res, "AUTH_FAILED", session.swagger); }
+    } catch { this.fail(res, "AUTH_FAILED", session.swagger, session.redirect); }
   };
 
-  private fail(res: Response, reason: string, swagger = false) { res.redirect(swagger ? `/api-docs/?login=${reason}` : new URL(`/auth/error?reason=${reason}`, config.frontendUrl).toString()); }
+  private fail(res: Response, reason: string, swagger = false, redirect?: string) {
+    const target = new URL(redirect ?? "/auth/error", config.frontendUrl);
+    target.searchParams.set("reason", reason);
+    res.redirect(swagger ? `/api-docs/?login=${reason}` : target.toString());
+  }
   private setRefresh(res: Response, token: string, frontend = false) { res.cookie(frontend ? "frontendRefreshToken" : "refreshToken", token, { ...refreshOptions, maxAge: refreshMaxAge }); }
   private checkOrigin(req: Request) {
     const origins = [new URL(config.frontendUrl).origin, new URL(config.googleCallbackUrl).origin];
-    if ((req.headers.origin && !origins.includes(req.headers.origin)) || req.headers["sec-fetch-site"] === "cross-site") {
+    if ((req.headers.origin ? !origins.includes(req.headers.origin) : req.headers["sec-fetch-site"] === "cross-site")) {
       throw new AppError(403, "Untrusted request origin");
     }
   }
