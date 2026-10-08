@@ -140,3 +140,24 @@ Access JWT는 사용자 ID를 표준 `sub` 클레임에 담고, 기존 requireAu
 `target` 없는 기존 API/Swagger는 refreshToken 쿠키를 계속 사용합니다. 프론트는 frontendRefreshToken 쿠키를 사용하므로 target을 일관되게 전달해야 합니다.
 기존 사용자당 하나의 refresh 해시 및 rotation 구조를 유지합니다. 새 로그인은 이전 세션을 무효화하며 멀티 기기 세션 시스템은 추가하지 않았습니다.
 실제 환경 변수가 설정돼 있으면 기본 15분보다 해당 JWT_ACCESS_EXPIRES_IN 값이 우선합니다.
+
+
+## 권리·거래 기능 및 로컬 검증
+
+Contribution CRUD/확정, AI 결과/이력/Top-3, 로컬 Metadata, EIP-712 등록 준비, Marketplace, License 구매 요청, Transaction/수익 배분을 구현했습니다. 기존 `/api/v1/auth`와 `/api/tracks`를 유지합니다. 지갑은 사용자별 일회용 challenge/signMessage 소유권 검증으로 등록합니다.
+
+외부 Provider 기본값은 **unconfigured**입니다. `AI_PROVIDER_MODE=mock`, `PAYMENT_PROVIDER_MODE=mock`를 명시하면 고정 fixture 흐름을 실행할 수 있지만 실제 분석·CID·블록체인·NFT·출금 성공으로 취급하지 않습니다. 공개 ACTIVE 판매는 실제 AI/등록 영수증/Metadata가 필요합니다.
+
+- [전체 API와 상태 정책](docs/RIGHTS_WORKFLOWS.md)
+- [로컬 실행·테스트·환경 설정](docs/LOCAL_DEVELOPMENT.md)
+- [EIP-712 및 외부 Adapter 계약](docs/BLOCKCHAIN_INTEGRATION.md)
+- [DB 모델·마이그레이션](docs/DATABASE.md)
+
+일반 `npm test`는 DB 소켓 미지정 시 3개 DB 테스트를 skip합니다. 폐기 가능한 로컬 MySQL 소켓을 지정하면 기존 데이터 보존, 실제 Auth/Track 흐름 및 권리·거래 전체 E2E를 검증하고 테스트 DB/파일을 정리합니다.
+
+```sh
+SCHEMA_TEST_MYSQL_SOCKET=/path/to/disposable-mysql.sock \
+SCHEMA_TEST_MYSQL_BIN=/path/to/mysql npm test
+```
+
+실제 외부 서비스/컨트랙트 연결과 프론트 통합은 아직 진행하지 않았습니다. 이번 작업에서는 기존 .env DB에도 자동으로 마이그레이션을 적용하지 않았으므로 로컬 대상 DB를 확인한 뒤 `npm run prisma:deploy`와 `npm run prisma:generate`를 실행하세요.

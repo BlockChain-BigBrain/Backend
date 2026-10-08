@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "node:path";
 
 function duration(value: string): number {
   const match = /^(\d+)([smhd])$/.exec(value);
@@ -13,6 +14,15 @@ if (!Number.isFinite(maxUploadMb) || maxUploadMb <= 0 || maxUploadMb > 100 || ma
   throw new Error("MAX_UPLOAD_MB must be greater than 0 and at most 100");
 }
 
+function providerMode(name: string): "unconfigured" | "mock" {
+  const value = process.env[name] ?? "unconfigured";
+  if (value !== "unconfigured" && value !== "mock") throw new Error(`${name} must be unconfigured or mock`);
+  return value;
+}
+
+const verificationTimeoutMs = Number(process.env.VERIFICATION_TIMEOUT_MS ?? 30000);
+if (!Number.isSafeInteger(verificationTimeoutMs) || verificationTimeoutMs < 100 || verificationTimeoutMs > 60000) throw new Error("VERIFICATION_TIMEOUT_MS must be between 100 and 60000");
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
@@ -25,6 +35,10 @@ export const config = {
   accessExpiresIn: duration(process.env.JWT_ACCESS_EXPIRES_IN ?? "15m"),
   refreshExpiresIn: duration(process.env.JWT_REFRESH_EXPIRES_IN ?? "14d"),
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
+  metadataDir: process.env.METADATA_DIR ?? path.join(process.env.UPLOAD_DIR ?? "uploads", "metadata"),
+  aiProviderMode: providerMode("AI_PROVIDER_MODE"),
+  verificationTimeoutMs,
+  paymentProviderMode: providerMode("PAYMENT_PROVIDER_MODE"),
   maxUploadMb,
   maxUploadBytes,
 };

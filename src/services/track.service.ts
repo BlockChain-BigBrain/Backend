@@ -65,7 +65,8 @@ export class TrackService {
     try {
       return await this.tracks.withLockedTrack(trackId(id), async (tx, track) => {
         owner(track, userId); editable(track);
-        return response(await this.tracks.update(tx, id, data), userId);
+        const update = ["title", "prompt", "workLog"].some(key => key in data) ? { ...data, metadataCid: null, audioCid: null } : data;
+        return response(await this.tracks.update(tx, id, update), userId);
       });
     } catch (error) { translate(error); }
   }

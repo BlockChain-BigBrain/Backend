@@ -20,6 +20,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
+    "ethers": "^6.17.0",
     "express": "^5.1.0",
     "google-auth-library": "^10.4.1",
     "jsonwebtoken": "^9.0.2",
@@ -38,5 +39,10 @@
     "prisma": "^6.16.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "^8.0.0"
+    }
   }
 }

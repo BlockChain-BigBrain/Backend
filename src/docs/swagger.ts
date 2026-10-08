@@ -1,4 +1,5 @@
 import { trackPaths, trackSchemas } from "./track.swagger";
+import { rightsPaths, rightsSchemas } from "./rights.swagger";
 
 const authResponse = (result: object) => ({ type: "object", properties: {
   isSuccess: { type: "boolean", example: true }, code: { type: "string", example: "COMMON200" },
@@ -18,6 +19,7 @@ export const swaggerSpec = {
     { name: "Health", description: "서버 상태" },
     { name: "Auth", description: "Google 로그인" },
     { name: "Tracks", description: "음원 등록 및 관리" },
+    ...["Contributions", "Verification", "Metadata", "Blockchain", "Marketplace", "Licenses", "Revenue"].map(name => ({ name })),
   ],
   components: {
     securitySchemes: {
@@ -55,6 +57,7 @@ export const swaggerSpec = {
         },
       },
       ...trackSchemas,
+      ...rightsSchemas,
     },
   },
   paths: {
@@ -144,5 +147,6 @@ export const swaggerSpec = {
       },
     },
     ...trackPaths,
+    ...rightsPaths,
   },
 } as const;

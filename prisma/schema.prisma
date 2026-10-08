@@ -93,6 +93,27 @@ enum WithdrawalStatus {
   CANCELLED
 }
 
+enum ProofSource {
+  UNCONFIGURED
+  MOCK
+  REAL
+}
+
+enum PreparationStatus {
+  PREPARED
+  UPLOADED
+  FAILED
+}
+
+enum PurchaseStatus {
+  PENDING_PAYMENT
+  PENDING_MINT
+  COMPLETED
+  SIMULATED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id                  Int                  @id @default(autoincrement())
   refreshTokenHash    String?              @db.VarChar(64)
@@ -109,6 +130,8 @@ model User {
   marketplaceListings MarketplaceListing[]
   revenueAllocations  RevenueAllocation[]
   revenueWithdrawals  RevenueWithdrawal[]
+  purchaseRequests    PurchaseRequest[]
+  walletChallenge     WalletChallenge?
   tracks              Track[]              @relation("TrackOwner")
   contributions       Contribution[]
   licenses            License[]
@@ -116,28 +139,31 @@ model User {
 }
 
 model Track {
-  id                        Int                  @id @default(autoincrement())
+  id                        Int                   @id @default(autoincrement())
   title                     String
-  isPublic                  Boolean              @default(true)
-  prompt                    String?              @db.Text
-  workLog                   String?              @db.Text
+  isPublic                  Boolean               @default(true)
+  prompt                    String?               @db.Text
+  workLog                   String?               @db.Text
   audioPath                 String
   mimeType                  String
   ownerId                   Int
-  audioHash                 String?              @db.VarChar(64)
-  fileSize                  BigInt?              @db.UnsignedBigInt
-  duration                  Decimal?             @db.Decimal(12, 3)
-  metadataCid               String?              @db.VarChar(255)
-  audioCid                  String?              @db.VarChar(255)
-  registrationStatus        RegistrationStatus   @default(NOT_REGISTERED)
-  blockchainTrackId         String?              @db.VarChar(78)
-  registrationTxHash        String?              @db.VarChar(66)
+  audioHash                 String?               @db.VarChar(64)
+  fileSize                  BigInt?               @db.UnsignedBigInt
+  duration                  Decimal?              @db.Decimal(12, 3)
+  metadataCid               String?               @db.VarChar(255)
+  audioCid                  String?               @db.VarChar(255)
+  registrationStatus        RegistrationStatus    @default(NOT_REGISTERED)
+  blockchainTrackId         String?               @db.VarChar(78)
+  registrationTxHash        String?               @db.VarChar(66)
   contributionsFinalizedAt  DateTime?
   marketplaceListings       MarketplaceListing[]
-  comparedSimilarityResults SimilarityResult[]   @relation("ComparedTrack")
-  createdAt                 DateTime             @default(now())
-  updatedAt                 DateTime             @updatedAt
-  owner                     User                 @relation("TrackOwner", fields: [ownerId], references: [id])
+  metadataSnapshots         MetadataSnapshot[]
+  registrationRequests      RegistrationRequest[]
+  purchaseRequests          PurchaseRequest[]
+  comparedSimilarityResults SimilarityResult[]    @relation("ComparedTrack")
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  owner                     User                  @relation("TrackOwner", fields: [ownerId], references: [id])
   contributions             Contribution[]
   verifications             Verification[]
   similarityResults         SimilarityResult[]
@@ -203,20 +229,22 @@ model SimilarityResult {
 }
 
 model License {
-  id              Int           @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   trackId         Int
   buyerId         Int
   type            LicenseType
-  licenseStatus   LicenseStatus @default(PENDING_PAYMENT)
-  currency        Currency      @default(UNKNOWN)
-  tokenId         String?       @db.VarChar(78)
-  purchaseTxHash  String?       @db.VarChar(66)
+  source          ProofSource      @default(UNCONFIGURED)
+  purchaseRequest PurchaseRequest?
+  licenseStatus   LicenseStatus    @default(PENDING_PAYMENT)
+  currency        Currency         @default(UNKNOWN)
+  tokenId         String?          @db.VarChar(78)
+  purchaseTxHash  String?          @db.VarChar(66)
   issuedAt        DateTime?
-  licenseTermsCid String?       @db.VarChar(255)
-  price           Decimal       @db.Decimal(36, 18)
-  createdAt       DateTime      @default(now())
-  track           Track         @relation(fields: [trackId], references: [id])
-  buyer           User          @relation(fields: [buyerId], references: [id])
+  licenseTermsCid String?          @db.VarChar(255)
+  price           Decimal          @db.Decimal(36, 18)
+  createdAt       DateTime         @default(now())
+  track           Track            @relation(fields: [trackId], references: [id])
+  buyer           User             @relation(fields: [buyerId], references: [id])
   transactions    Transaction[]
 
   @@index([buyerId, createdAt])
@@ -228,6 +256,9 @@ model Transaction {
   trackId            Int
   userId             Int
   licenseId          Int?
+  source             ProofSource         @default(UNCONFIGURED)
+  purchaseRequestId  Int?                @unique
+  purchaseRequest    PurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
   transactionType    TransactionType     @default(LICENSE_PURCHASE)
   paymentReference   String?             @unique
   failureReason      String?             @db.Text
@@ -248,19 +279,20 @@ model Transaction {
 }
 
 model MarketplaceListing {
-  id            Int           @id @default(autoincrement())
-  trackId       Int
-  sellerId      Int
-  price         Decimal       @db.Decimal(36, 18)
-  currency      Currency
-  status        ListingStatus @default(PREPARING)
-  licenseType   LicenseType   @default(COMMERCIAL)
+  id               Int               @id @default(autoincrement())
+  trackId          Int
+  sellerId         Int
+  price            Decimal           @db.Decimal(36, 18)
+  currency         Currency
+  status           ListingStatus     @default(PREPARING)
+  licenseType      LicenseType       @default(COMMERCIAL)
+  purchaseRequests PurchaseRequest[]
   // DB CHECK binds this to trackId for ACTIVE, NULL otherwise.
-  activeTrackId Int?          @unique
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  track         Track         @relation(fields: [trackId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  seller        User          @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  activeTrackId    Int?              @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  track            Track             @relation(fields: [trackId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  seller           User              @relation(fields: [sellerId], references: [id], onDelete: Restrict)
 
   @@index([trackId, status])
   @@index([sellerId, createdAt])
@@ -301,4 +333,89 @@ model RevenueWithdrawal {
 
   @@index([userId, currency, status])
   @@index([userId, createdAt])
+}
+
+model MetadataSnapshot {
+  id            Int                   @id @default(autoincrement())
+  trackId       Int
+  version       Int
+  hash          String                @db.VarChar(64)
+  document      Json
+  status        PreparationStatus     @default(PREPARED)
+  metadataCid   String?               @db.VarChar(255)
+  audioCid      String?               @db.VarChar(255)
+  errorCode     String?
+  errorMessage  String?               @db.Text
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  track         Track                 @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  registrations RegistrationRequest[]
+
+  @@unique([trackId, version])
+  @@index([trackId, hash])
+}
+
+model RegistrationRequest {
+  id                 Int                @id @default(autoincrement())
+  trackId            Int
+  metadataSnapshotId Int?
+  nonce              String             @unique @db.VarChar(78)
+  deadline           DateTime
+  chainId            String             @db.VarChar(78)
+  contractAddress    String?            @db.VarChar(42)
+  status             RegistrationStatus @default(PENDING)
+  source             ProofSource        @default(UNCONFIGURED)
+  typedData          Json?
+  signature          String?            @db.VarChar(132)
+  txHash             String?            @db.VarChar(66)
+  blockchainTrackId  String?            @db.VarChar(78)
+  errorCode          String?
+  errorMessage       String?            @db.Text
+  confirmedAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  track              Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  metadataSnapshot   MetadataSnapshot?  @relation(fields: [metadataSnapshotId], references: [id], onDelete: Restrict)
+
+  @@index([trackId, status])
+}
+
+model PurchaseRequest {
+  id                   Int                @id @default(autoincrement())
+  trackId              Int
+  buyerId              Int
+  listingId            Int
+  licenseId            Int?               @unique
+  licenseType          LicenseType
+  price                Decimal            @db.Decimal(36, 18)
+  currency             Currency
+  status               PurchaseStatus     @default(PENDING_PAYMENT)
+  source               ProofSource        @default(UNCONFIGURED)
+  preparation          Boolean            @default(false)
+  idempotencyKey       String             @db.VarChar(100)
+  activeBuyerTrackType String?            @unique @db.VarChar(100)
+  contributorSnapshot  Json
+  failureReason        String?            @db.Text
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  confirmedAt          DateTime?
+  track                Track              @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  buyer                User               @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  listing              MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  license              License?           @relation(fields: [licenseId], references: [id], onDelete: Restrict)
+  transaction          Transaction?
+
+  @@unique([buyerId, idempotencyKey])
+  @@index([buyerId, createdAt])
+}
+
+model WalletChallenge {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  walletAddress String    @db.VarChar(42)
+  nonce         String    @db.VarChar(64)
+  message       String    @db.Text
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -67,3 +67,19 @@ SCHEMA_TEST_MYSQL_SOCKET=/path/to/disposable-mysql.sock npm test
 ## Track 관리 단계의 추가 변경
 
 `feature/track-management`에서 Track.isPublic Boolean(default true)와 `[isPublic, createdAt]` 인덱스를 `20261008110000_add_track_visibility`로 추가한다. 기존 음원 공개 상태를 유지하며 private 접근은 서비스에서 소유자를 검사한다. Track API 변경·파일 삭제 복구·테스트 방법은 [TRACK_MANAGEMENT.md](TRACK_MANAGEMENT.md)를 참조한다. 기존 모델/외래키/금액 및 CHECK는 변경하지 않는다.
+
+## main의 권리·거래 단계 확장
+
+`20261008120000_add_rights_workflows`는 MetadataSnapshot, RegistrationRequest, PurchaseRequest, WalletChallenge와 License/Transaction의 ProofSource를 추가한다. 기존 레코드는 UNCONFIGURED로 유지하므로 과거 COMPLETED 상태만으로 실제 NFT/결제 증명을 인정하지 않는다. Transaction.purchaseRequestId는 nullable unique이며 기존 거래를 유지한다.
+
+| 모델 | 관계 / 제약 | 삭제 정책 |
+| --- | --- | --- |
+| MetadataSnapshot | Track별 version unique, hash 인덱스, Json document, CID/생성 상태/오류, version >0 CHECK | Track CASCADE; RegistrationRequest 참조는 RESTRICT |
+| RegistrationRequest | Track, 선택 MetadataSnapshot, 전역 unique nonce, deadline/chain/contract/typedData/signature/영수증 | Track CASCADE, snapshot RESTRICT |
+| PurchaseRequest | Track/Buyer/Listing/선택 License, 사용자+idempotencyKey unique, activeBuyerTrackType nullable unique, 가격/지분 Json 스냅샷 | 모든 참조 RESTRICT; Transaction에서도 RESTRICT |
+| WalletChallenge | User와 1:1(userId unique), 주소/message/nonce/만료/소비 시각 | User CASCADE |
+| Transaction 확장 | nullable unique PurchaseRequest 참조, source | PurchaseRequest RESTRICT |
+
+PurchaseRequest의 신규 상태는 PENDING_PAYMENT/PENDING_MINT/COMPLETED/SIMULATED/FAILED/CANCELLED다. PREPARATION은 별도 boolean이며 실제 구매로 승격하지 않는다. 활성 구매 키는 buyer:track:licenseType:preparation/live이며 FAILED/CANCELLED/SIMULATED에서는 해제한다. 역할별 기여는 구매 시 사용자별 지분 스냅샷으로 고정한다.
+
+현재 데이터 모델·API·변경 파일과 테스트 범위는 [RIGHTS_WORKFLOWS.md](RIGHTS_WORKFLOWS.md), 로컬 실행은 [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md), 최종 컨트랙트 검증 조건은 [BLOCKCHAIN_INTEGRATION.md](BLOCKCHAIN_INTEGRATION.md)에 정리했다. 외부 연동은 기본적으로 미설정이며 실제 CID/영수증/온체인 발급을 임의로 채우지 않는다.

@@ -1,4 +1,5 @@
 import cors from "cors";
+import { publicHttpError } from "./utils/errors";
 import { logServerError } from "./utils/errorLogger";
 import express, { NextFunction, Request, Response } from "express";
 import swaggerUi from "swagger-ui-express";
@@ -15,6 +16,9 @@ import { UserRepository } from "./repositories/user.repository";
 import { TrackRepository } from "./repositories/track.repository";
 import { prisma } from "./utils/prisma";
 import { swaggerSpec } from "./docs/swagger";
+import { RightsController } from "./controllers/rights.controller";
+import { createRightsServices } from "./services/rights.services";
+import { createRightsRoutes } from "./routes/rights.routes";
 
 const app = express();
 const authController = new AuthController(new AuthService(new UserRepository(prisma)));
@@ -30,18 +34,18 @@ app.get("/google08be8fbfab8fe440.html", (_req, res) => {
 // Keep the old OAuth redirect URI working while provider settings are updated.
 app.get("/api/auth/callback/google", (req, res) => res.redirect(307, `/api/v1/auth/callback/google${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`));
 app.use("/api/v1/auth", createAuthRoutes(authController));
+app.use("/api", createRightsRoutes(new RightsController(createRightsServices(prisma))));
 app.use("/api/tracks", createTrackRoutes(trackController));
 app.get("/api/me", requireAuth, (req, res) => res.json({ userId: (req as Request & { userId?: number }).userId }));
 app.use((error: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
   if (res.headersSent) return _next(error);
-  const bodyError = error as Error & { type?: string };
-  const statusCode = bodyError.type === "entity.parse.failed" ? 400 : bodyError.type === "entity.too.large" ? 413 : error.statusCode ?? 500;
+  const { statusCode, message } = publicHttpError(error);
   if (statusCode >= 500) logServerError(_req.path === "/api/tracks" || _req.path === "/api/tracks/" ? "tracks_request_failed" : "http_request_failed", error);
   if (_req.path.startsWith("/api/v1/auth/")) {
-    res.status(statusCode).json({ isSuccess: false, code: `COMMON${statusCode}`, message: statusCode >= 500 ? "Internal server error" : bodyError.type === "entity.parse.failed" ? "Invalid JSON body" : error.message, result: null });
+    res.status(statusCode).json({ isSuccess: false, code: `COMMON${statusCode}`, message: message, result: null });
     return;
   }
-  res.status(statusCode).json({ error: statusCode >= 500 ? "Internal server error" : bodyError.type === "entity.parse.failed" ? "Invalid JSON body" : error.message });
+  res.status(statusCode).json({ error: message });
 });
 
 export default app;
