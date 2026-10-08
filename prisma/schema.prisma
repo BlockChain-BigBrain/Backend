@@ -38,40 +38,114 @@ enum AuthProvider {
   GOOGLE
 }
 
+enum RegistrationStatus {
+  NOT_REGISTERED
+  PENDING
+  REGISTERED
+  FAILED
+}
+
+enum RiskStatus {
+  PASS
+  WARN
+  HOLD
+}
+
+enum VerificationSource {
+  UNCONFIGURED
+  MOCK
+  AI
+}
+
+// UNKNOWN preserves legacy amounts without guessing their currency.
+enum Currency {
+  UNKNOWN
+  KRW
+  USD
+  ETH
+  MATIC
+}
+
+enum ListingStatus {
+  PREPARING
+  ACTIVE
+  INACTIVE
+}
+
+enum LicenseStatus {
+  PENDING_PAYMENT
+  PENDING_MINT
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransactionType {
+  LICENSE_PURCHASE
+  REVENUE_WITHDRAWAL
+}
+
+enum WithdrawalStatus {
+  PREPARING
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model User {
-  id            Int            @id @default(autoincrement())
-  refreshTokenHash String?        @db.VarChar(64)
-  googleId      String?        @unique
-  provider      AuthProvider   @default(GOOGLE)
-  passwordHash  String?
-  preferredLanguage String    @default("ko")
-  email         String         @unique
-  name          String
-  profileImage   String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  tracks        Track[]        @relation("TrackOwner")
-  contributions Contribution[]
-  licenses      License[]
-  transactions  Transaction[]
+  id                  Int                  @id @default(autoincrement())
+  refreshTokenHash    String?              @db.VarChar(64)
+  googleId            String?              @unique
+  provider            AuthProvider         @default(GOOGLE)
+  passwordHash        String?
+  preferredLanguage   String               @default("ko")
+  email               String               @unique
+  name                String
+  profileImage        String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  walletAddress       String?              @unique @db.VarChar(42)
+  marketplaceListings MarketplaceListing[]
+  revenueAllocations  RevenueAllocation[]
+  revenueWithdrawals  RevenueWithdrawal[]
+  tracks              Track[]              @relation("TrackOwner")
+  contributions       Contribution[]
+  licenses            License[]
+  transactions        Transaction[]
 }
 
 model Track {
-  id                Int                @id @default(autoincrement())
-  title             String
-  prompt            String?            @db.Text
-  workLog           String?            @db.Text
-  audioPath         String
-  mimeType          String
-  ownerId           Int
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  owner             User               @relation("TrackOwner", fields: [ownerId], references: [id])
-  contributions     Contribution[]
-  verifications     Verification[]
-  similarityResults SimilarityResult[]
-  licenses          License[]
-  transactions      Transaction[]
+  id                        Int                  @id @default(autoincrement())
+  title                     String
+  prompt                    String?              @db.Text
+  workLog                   String?              @db.Text
+  audioPath                 String
+  mimeType                  String
+  ownerId                   Int
+  audioHash                 String?              @db.VarChar(64)
+  fileSize                  BigInt?              @db.UnsignedBigInt
+  duration                  Decimal?             @db.Decimal(12, 3)
+  metadataCid               String?              @db.VarChar(255)
+  audioCid                  String?              @db.VarChar(255)
+  registrationStatus        RegistrationStatus   @default(NOT_REGISTERED)
+  blockchainTrackId         String?              @db.VarChar(78)
+  registrationTxHash        String?              @db.VarChar(66)
+  contributionsFinalizedAt  DateTime?
+  marketplaceListings       MarketplaceListing[]
+  comparedSimilarityResults SimilarityResult[]   @relation("ComparedTrack")
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
+  owner                     User                 @relation("TrackOwner", fields: [ownerId], references: [id])
+  contributions             Contribution[]
+  verifications             Verification[]
+  similarityResults         SimilarityResult[]
+  licenses                  License[]
+  transactions              Transaction[]
+
+  @@index([ownerId, createdAt])
+  @@index([audioHash])
+  @@index([registrationStatus])
 }
 
 model Contribution {
@@ -84,50 +158,145 @@ model Contribution {
   user       User             @relation(fields: [userId], references: [id])
 
   @@unique([trackId, userId, role])
+  @@index([userId])
 }
 
 model Verification {
-  id          Int                @id @default(autoincrement())
-  trackId     Int
-  status      VerificationStatus @default(PENDING)
-  fingerprint String?            @db.Text
-  message     String?            @db.Text
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  track       Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  id                Int                @id @default(autoincrement())
+  trackId           Int
+  status            VerificationStatus @default(PENDING)
+  source            VerificationSource @default(UNCONFIGURED)
+  duplicate         Boolean?
+  riskScore         Decimal?           @db.Decimal(5, 4)
+  riskStatus        RiskStatus?
+  modelVersion      String?
+  verifiedAt        DateTime?
+  errorCode         String?
+  errorMessage      String?            @db.Text
+  similarityResults SimilarityResult[]
+  fingerprint       String?            @db.Text
+  message           String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  track             Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([trackId, createdAt])
+  @@index([trackId, status])
 }
 
 model SimilarityResult {
-  id          Int      @id @default(autoincrement())
-  trackId     Int
-  comparedUrl String?
-  score       Decimal  @db.Decimal(5, 4)
-  createdAt   DateTime @default(now())
-  track       Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  id              Int           @id @default(autoincrement())
+  trackId         Int
+  verificationId  Int?
+  comparedTrackId Int?
+  verification    Verification? @relation(fields: [verificationId], references: [id], onDelete: SetNull)
+  comparedTrack   Track?        @relation("ComparedTrack", fields: [comparedTrackId], references: [id], onDelete: SetNull)
+  comparedUrl     String?
+  score           Decimal       @db.Decimal(5, 4)
+  createdAt       DateTime      @default(now())
+  track           Track         @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([verificationId, score])
+  @@index([comparedTrackId])
 }
 
 model License {
-  id           Int           @id @default(autoincrement())
-  trackId      Int
-  buyerId      Int
-  type         LicenseType
-  price        Decimal       @db.Decimal(12, 2)
-  createdAt    DateTime      @default(now())
-  track        Track         @relation(fields: [trackId], references: [id])
-  buyer        User          @relation(fields: [buyerId], references: [id])
-  transactions Transaction[]
+  id              Int           @id @default(autoincrement())
+  trackId         Int
+  buyerId         Int
+  type            LicenseType
+  licenseStatus   LicenseStatus @default(PENDING_PAYMENT)
+  currency        Currency      @default(UNKNOWN)
+  tokenId         String?       @db.VarChar(78)
+  purchaseTxHash  String?       @db.VarChar(66)
+  issuedAt        DateTime?
+  licenseTermsCid String?       @db.VarChar(255)
+  price           Decimal       @db.Decimal(36, 18)
+  createdAt       DateTime      @default(now())
+  track           Track         @relation(fields: [trackId], references: [id])
+  buyer           User          @relation(fields: [buyerId], references: [id])
+  transactions    Transaction[]
+
+  @@index([buyerId, createdAt])
+  @@index([trackId, licenseStatus])
 }
 
 model Transaction {
-  id        Int               @id @default(autoincrement())
-  trackId   Int
-  userId    Int
-  licenseId Int?
-  amount    Decimal           @db.Decimal(12, 2)
-  status    TransactionStatus @default(PENDING)
-  txHash    String?
-  createdAt DateTime          @default(now())
-  track     Track             @relation(fields: [trackId], references: [id])
-  user      User              @relation(fields: [userId], references: [id])
-  license   License?          @relation(fields: [licenseId], references: [id])
+  id                 Int                 @id @default(autoincrement())
+  trackId            Int
+  userId             Int
+  licenseId          Int?
+  transactionType    TransactionType     @default(LICENSE_PURCHASE)
+  paymentReference   String?             @unique
+  failureReason      String?             @db.Text
+  confirmedAt        DateTime?
+  currency           Currency            @default(UNKNOWN)
+  revenueAllocations RevenueAllocation[]
+  amount             Decimal             @db.Decimal(36, 18)
+  status             TransactionStatus   @default(PENDING)
+  txHash             String?
+  createdAt          DateTime            @default(now())
+  track              Track               @relation(fields: [trackId], references: [id])
+  user               User                @relation(fields: [userId], references: [id])
+  license            License?            @relation(fields: [licenseId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([trackId, status])
+  @@index([licenseId])
+}
+
+model MarketplaceListing {
+  id            Int           @id @default(autoincrement())
+  trackId       Int
+  sellerId      Int
+  price         Decimal       @db.Decimal(36, 18)
+  currency      Currency
+  status        ListingStatus @default(PREPARING)
+  licenseType   LicenseType   @default(COMMERCIAL)
+  // DB CHECK binds this to trackId for ACTIVE, NULL otherwise.
+  activeTrackId Int?          @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  track         Track         @relation(fields: [trackId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  seller        User          @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+
+  @@index([trackId, status])
+  @@index([sellerId, createdAt])
+  @@index([status, currency, price])
+  @@index([status, createdAt])
+}
+
+model RevenueAllocation {
+  id            Int         @id @default(autoincrement())
+  transactionId Int
+  userId        Int
+  percentage    Decimal     @db.Decimal(5, 2)
+  amount        Decimal     @db.Decimal(36, 18)
+  currency      Currency
+  // An allocation is only an estimate until external settlement is verified.
+  confirmedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([transactionId, userId])
+  @@index([userId, currency, confirmedAt])
+}
+
+model RevenueWithdrawal {
+  id               Int              @id @default(autoincrement())
+  userId           Int
+  amount           Decimal          @db.Decimal(36, 18)
+  currency         Currency
+  status           WithdrawalStatus @default(PREPARING)
+  paymentReference String?          @unique
+  txHash           String?          @db.VarChar(66)
+  failureReason    String?          @db.Text
+  confirmedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, currency, status])
+  @@index([userId, createdAt])
 }
