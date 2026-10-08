@@ -35,7 +35,7 @@ test('migrations preserve legacy records and enforce new integrity rules', { ski
       sql(readFileSync(path.join(migrations, folder, 'migration.sql'), 'utf8'));
     }
     assert.equal(sql('SELECT passwordHash,refreshTokenHash FROM User WHERE id=1'), 'preserved-password\tpreserved-refresh');
-    assert.equal(sql('SELECT registrationStatus,audioHash IS NULL FROM Track WHERE id=1'), 'NOT_REGISTERED\t1');
+    assert.equal(sql('SELECT registrationStatus,audioHash IS NULL,isPublic FROM Track WHERE id=1'), 'NOT_REGISTERED\t1\t1');
     assert.equal(sql('SELECT status,source,riskScore IS NULL FROM Verification WHERE id=1'), 'VERIFIED\tUNCONFIGURED\t1');
     assert.equal(sql('SELECT verificationId IS NULL,comparedTrackId IS NULL FROM SimilarityResult'), '1\t1');
     assert.equal(sql('SELECT price,currency,licenseStatus FROM License'), '9999999999.990000000000000000\tUNKNOWN\tPENDING_PAYMENT');

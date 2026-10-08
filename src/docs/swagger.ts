@@ -1,3 +1,5 @@
+import { trackPaths, trackSchemas } from "./track.swagger";
+
 const authResponse = (result: object) => ({ type: "object", properties: {
   isSuccess: { type: "boolean", example: true }, code: { type: "string", example: "COMMON200" },
   message: { type: "string", example: "요청에 성공했습니다." }, result,
@@ -52,18 +54,7 @@ export const swaggerSpec = {
           percentage: { type: "number", format: "float", example: 60 },
         },
       },
-      Track: {
-        type: "object",
-        properties: {
-          id: { type: "integer", example: 1 },
-          title: { type: "string", example: "Demo Track" },
-          prompt: { type: "string", nullable: true },
-          workLog: { type: "string", nullable: true },
-          audioPath: { type: "string", example: "/uploads/1727000000000-demo.mp3" },
-          mimeType: { type: "string", example: "audio/mpeg" },
-          ownerId: { type: "integer", example: 1 },
-        },
-      },
+      ...trackSchemas,
     },
   },
   paths: {
@@ -152,60 +143,6 @@ export const swaggerSpec = {
         },
       },
     },
-    "/api/tracks": {
-      get: {
-        tags: ["Tracks"],
-        summary: "Track 목록 조회",
-        responses: { "200": { description: "Track 목록" } },
-      },
-      post: {
-        tags: ["Tracks"],
-        summary: "음원 업로드 및 Track 생성",
-        security: [{ "access-token": [] }],
-        requestBody: {
-          required: true,
-          content: {
-            "multipart/form-data": {
-              schema: {
-                type: "object",
-                required: ["audio", "title"],
-                properties: {
-                  audio: { type: "string", format: "binary" },
-                  title: { type: "string" },
-                  prompt: { type: "string" },
-                  workLog: { type: "string" },
-                  contributors: { type: "string", description: "Contribution 배열 JSON 문자열" },
-                },
-              },
-            },
-          },
-        },
-        responses: { "201": { description: "Track 생성 성공" }, "400": { description: "입력값 또는 파일 오류" }, "401": { description: "인증 필요" } },
-      },
-    },
-    "/api/tracks/{id}": {
-      get: {
-        tags: ["Tracks"],
-        summary: "Track 상세 조회",
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
-        responses: { "200": { description: "Track 상세 정보" }, "404": { description: "Track 없음" } },
-      },
-      delete: {
-        tags: ["Tracks"],
-        summary: "Track 및 로컬 음원 삭제",
-        security: [{ "access-token": [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
-        responses: { "204": { description: "삭제 성공" }, "401": { description: "인증 필요" }, "404": { description: "Track 없음" } },
-      },
-    },
-    "/api/tracks/{id}/verify": {
-      post: {
-        tags: ["Tracks"],
-        summary: "Track 검증 요청",
-        security: [{ "access-token": [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
-        responses: { "201": { description: "검증 요청 생성" }, "401": { description: "인증 필요" } },
-      },
-    },
+    ...trackPaths,
   },
 } as const;

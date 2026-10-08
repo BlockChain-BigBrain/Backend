@@ -118,6 +118,7 @@ model User {
 model Track {
   id                        Int                  @id @default(autoincrement())
   title                     String
+  isPublic                  Boolean              @default(true)
   prompt                    String?              @db.Text
   workLog                   String?              @db.Text
   audioPath                 String
@@ -144,6 +145,7 @@ model Track {
   transactions              Transaction[]
 
   @@index([ownerId, createdAt])
+  @@index([isPublic, createdAt])
   @@index([audioHash])
   @@index([registrationStatus])
 }

@@ -63,3 +63,7 @@ SCHEMA_TEST_MYSQL_SOCKET=/path/to/disposable-mysql.sock npm test
 ## 변경 및 충돌 범위
 
 변경 파일: prisma/schema.prisma, 신규 migration.sql, tests/database-schema.test.cjs, docs/DATABASE.md. 신규 API 및 Swagger 변경은 없다. 환경 변수 추가도 없다(위 변수는 테스트 전용). 후속 모든 DB 기능 브랜치는 schema.prisma와 migration 이력을 공유하므로 이 변경을 먼저 검토·병합하고 Client를 재생성한다. AI/IPFS/Blockchain/Payment 외부 연동은 아직 미구현이다.
+
+## Track 관리 단계의 추가 변경
+
+`feature/track-management`에서 Track.isPublic Boolean(default true)와 `[isPublic, createdAt]` 인덱스를 `20261008110000_add_track_visibility`로 추가한다. 기존 음원 공개 상태를 유지하며 private 접근은 서비스에서 소유자를 검사한다. Track API 변경·파일 삭제 복구·테스트 방법은 [TRACK_MANAGEMENT.md](TRACK_MANAGEMENT.md)를 참조한다. 기존 모델/외래키/금액 및 CHECK는 변경하지 않는다.

@@ -7,6 +7,12 @@ function duration(value: string): number {
   return Number(match[1]) * units[match[2]];
 }
 
+const maxUploadMb = Number(process.env.MAX_UPLOAD_MB ?? 50);
+const maxUploadBytes = Math.floor(maxUploadMb * 1024 * 1024);
+if (!Number.isFinite(maxUploadMb) || maxUploadMb <= 0 || maxUploadMb > 100 || maxUploadBytes < 1) {
+  throw new Error("MAX_UPLOAD_MB must be greater than 0 and at most 100");
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
@@ -19,5 +25,6 @@ export const config = {
   accessExpiresIn: duration(process.env.JWT_ACCESS_EXPIRES_IN ?? "15m"),
   refreshExpiresIn: duration(process.env.JWT_REFRESH_EXPIRES_IN ?? "14d"),
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
-  maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 50),
+  maxUploadMb,
+  maxUploadBytes,
 };

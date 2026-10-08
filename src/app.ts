@@ -20,9 +20,8 @@ const app = express();
 const authController = new AuthController(new AuthService(new UserRepository(prisma)));
 const trackController = new TrackController(new TrackService(new TrackRepository(prisma), prisma));
 
-app.use(cors({ origin: new URL(config.frontendUrl).origin, credentials: true }));
+app.use(cors({ origin: new URL(config.frontendUrl).origin, credentials: true, exposedHeaders: ["X-Total-Count", "X-Page", "X-Limit", "Content-Range", "Accept-Ranges"] }));
 app.use(express.json());
-app.use("/uploads", express.static(path.resolve(config.uploadDir)));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { swaggerOptions: { persistAuthorization: false } }));
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.get("/google08be8fbfab8fe440.html", (_req, res) => {
@@ -34,13 +33,15 @@ app.use("/api/v1/auth", createAuthRoutes(authController));
 app.use("/api/tracks", createTrackRoutes(trackController));
 app.get("/api/me", requireAuth, (req, res) => res.json({ userId: (req as Request & { userId?: number }).userId }));
 app.use((error: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
-  const statusCode = error.statusCode ?? 500;
+  if (res.headersSent) return _next(error);
+  const bodyError = error as Error & { type?: string };
+  const statusCode = bodyError.type === "entity.parse.failed" ? 400 : bodyError.type === "entity.too.large" ? 413 : error.statusCode ?? 500;
   if (statusCode >= 500) logServerError(_req.path === "/api/tracks" || _req.path === "/api/tracks/" ? "tracks_request_failed" : "http_request_failed", error);
   if (_req.path.startsWith("/api/v1/auth/")) {
-    res.status(statusCode).json({ isSuccess: false, code: `COMMON${statusCode}`, message: statusCode === 500 ? "Internal server error" : error.message, result: null });
+    res.status(statusCode).json({ isSuccess: false, code: `COMMON${statusCode}`, message: statusCode >= 500 ? "Internal server error" : bodyError.type === "entity.parse.failed" ? "Invalid JSON body" : error.message, result: null });
     return;
   }
-  res.status(statusCode).json({ error: statusCode === 500 ? "Internal server error" : error.message });
+  res.status(statusCode).json({ error: statusCode >= 500 ? "Internal server error" : bodyError.type === "entity.parse.failed" ? "Invalid JSON body" : error.message });
 });
 
 export default app;

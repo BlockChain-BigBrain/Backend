@@ -15,3 +15,9 @@ export function requireAuth(req: AuthenticatedRequest, _res: Response, next: Nex
     return next();
   } catch { return next(new AppError(401, "Invalid or expired token")); }
 }
+
+// Public reads may identify an owner. Supplied invalid credentials still fail.
+export function optionalAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.headers.authorization === undefined) return next();
+  return requireAuth(req, res, next);
+}

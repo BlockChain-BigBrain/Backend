@@ -26,10 +26,12 @@ npm run dev
 - `POST /api/v1/auth/refresh`: HttpOnly 쿠키로 `result.accessToken` 발급
 - `POST /api/v1/auth/logout`: refresh 쿠키 및 DB 해시 폐기
 - `GET /api/v1/auth/me`: Bearer 인증으로 공개 사용자 정보 조회
-- `GET /api/tracks`
-- `GET /api/tracks/:id`
-- `POST /api/tracks`: Bearer 인증, `multipart/form-data` (`audio`, `title`, `prompt`, `workLog`, `contributors`)
-- `DELETE /api/tracks/:id`: Bearer 인증
+- `GET /api/tracks`: 공개 음원 검색/정렬/페이지네이션 (`scope=mine`은 인증 필요)
+- `GET /api/tracks/:id`: 공개 상세 또는 소유자의 비공개 상세
+- `POST /api/tracks`: Bearer 인증, `multipart/form-data` (`audio`, `title`, `prompt`, `workLog`, `contributors`, `isPublic`)
+- `PATCH /api/tracks/:id`: 소유자 정보 수정
+- `DELETE /api/tracks/:id`: 소유자 삭제
+- `GET /api/tracks/:id/audio`: 공개/소유자 재생, Range 및 `download=true` 지원
 - `POST /api/tracks/:id/verify`: Bearer 인증
 
 `contributors`는 JSON 문자열 형식입니다. 예: `[{"userId":1,"role":"PROMPT","percentage":60}]`
@@ -83,7 +85,9 @@ OAuth state는 10분짜리 서버 메모리와 HttpOnly/Lax 쿠키로 검증합�
 서버 재시작 시 진행 중인 로그인은 다시 시작해야 하며, 여러 인스턴스 배포 시 공유 세션 저장소가 필요합니다.
 
 기존 DB는 `npx prisma migrate deploy`로 추가 마이그레이션을 적용합니다.
-테스트: `npm test` (Google/DB를 대체한 인증 회귀 테스트), 빌드: `npm run build`.
+테스트: `npm test` (인증·Track 단위/HTTP 테스트; 격리 MySQL 소켓 미지정 시 DB 테스트는 skip), 빌드: `npm run build`.
+
+음원은 MP3/PCM·IEEE float WAV만 지원하며 `/uploads` 직접 공개 경로는 제거했습니다. API의 `audioPath`는 `/api/tracks/:id/audio`입니다. 파일 보안, 공개 범위, 마이그레이션 및 DB 테스트 방법은 [Track 관리 문서](docs/TRACK_MANAGEMENT.md)를 참고하세요.
 
 ## Swagger에서 Google 로그인 테스트
 
