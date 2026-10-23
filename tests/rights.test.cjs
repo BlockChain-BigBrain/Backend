@@ -118,3 +118,10 @@ test('AI timeout aborts the provider and never turns a stalled analysis into a s
   await assert.rejects(verificationWithTimeout(provider,{trackId:1,audioHash:'a'.repeat(64),audioPath:'/uploads/fixture'},20),{statusCode:503});
   assert.equal(signal.aborted,true);
 });
+
+test('AI review evidence blocks both registration signing and sale even below fixed contract HOLD threshold',()=>{
+  const {track,options}=fixture();
+  track.verifications[0].source='AI';track.verifications[0].riskScore=new Prisma.Decimal('.895');track.verifications[0].riskStatus='WARN';track.verifications[0].evidence={decision:'HOLD',reviewRequired:true};
+  assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
+  assert.throws(()=>eligibleTrack(track,false),{statusCode:409});
+});

@@ -15,7 +15,14 @@
     "db:check": "node scripts/check-database.cjs",
     "prisma:deploy": "prisma migrate deploy",
     "blockchain:import": "node scripts/import-contract.cjs",
-    "test:blockchain": "npm run build && node --test tests/blockchain-e2e.test.cjs"
+    "test:blockchain": "npm run build && node --test tests/blockchain-e2e.test.cjs",
+    "local:setup": "node scripts/setup-local-service.cjs",
+    "local:infra": "docker compose --env-file .env.services.local -f compose.local.yml up -d --wait",
+    "local:chain": "node scripts/local-chain.cjs",
+    "local:migrate": "node --env-file=.env.services.local node_modules/prisma/build/index.js migrate deploy",
+    "dev:services": "node --env-file=.env.services.local --import tsx src/server.ts",
+    "local:check": "npm run build && node scripts/check-services.cjs",
+    "test:service": "npm run build && node scripts/test-service.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",

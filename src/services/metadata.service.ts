@@ -1,3 +1,4 @@
+import { canonicalJson } from "../utils/canonicalJson";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -22,7 +23,7 @@ export function metadataDocument(track: RightsTrack, options: unknown = {}) {
     schemaVersion: "1.0", title: track.title, audioHash: track.audioHash, creator: wallet(track.owner.walletAddress),
     contributors: creatorShares(track).map(item => ({ wallet: item.walletAddress!, percentage: item.percentage })),
     ...(publishPrompt ? { prompt: track.prompt } : {}), ...(publishWorkLog ? { workLog: track.workLog } : {}),
-    verification: { id: verification.id, source: verification.source, duplicate: verification.duplicate, riskScore: verification.riskScore.toNumber(), status: verification.riskStatus, modelVersion: verification.modelVersion },
+    verification: { id: verification.id, source: verification.source, duplicate: verification.duplicate, riskScore: verification.riskScore.toNumber(), status: verification.riskStatus, modelVersion: verification.modelVersion, ...(verification.evidence ? { evidence: verification.evidence } : {}) },
     disclosure: { prompt: publishPrompt, workLog: publishWorkLog },
   };
   validateMetadata(document);
@@ -45,7 +46,7 @@ export function snapshotMatchesTrack(track: RightsTrack): boolean {
   const disclosure = (latest.document as { disclosure?: { prompt?: boolean; workLog?: boolean } }).disclosure;
   try {
     const current = metadataDocument(track, { publishPrompt: disclosure?.prompt ?? false, publishWorkLog: disclosure?.workLog ?? false, acceptPublicDisclosure: true });
-    return createHash("sha256").update(JSON.stringify(current)).digest("hex") === latest.hash;
+    return [canonicalJson(current), JSON.stringify(current)].some(content => createHash("sha256").update(content).digest("hex") === latest.hash);
   } catch { return false; }
 }
 export function cidBytes(value: unknown): Buffer | undefined {
@@ -79,7 +80,7 @@ export class MetadataService {
     return this.repo.locked(id, async (tx, track) => {
       own(track, userId); mutable(track);
       const document = metadataDocument(track, options);
-      const content = JSON.stringify(document), hash = createHash("sha256").update(content).digest("hex");
+      const content = canonicalJson(document), hash = createHash("sha256").update(content).digest("hex");
       const latest = track.metadataSnapshots[0];
       const finalPath = path.join(this.root, `${id}-${hash}.json`), temporary = `${finalPath}.${randomUUID()}.tmp`;
       let failed = false;
@@ -103,6 +104,7 @@ export class MetadataService {
   // Trusted adapter/worker boundary. No endpoint accepts a client supplied CID.
   async upload(id: number, userId: number) {
     const track = await this.repo.track(id, userId, true), snapshot = track.metadataSnapshots[0];
+    own(track, userId); mutable(track);
     if (!snapshot || !track.audioHash || !snapshotMatchesTrack(track)) throw new AppError(409, "Prepare current metadata first");
     const request = { trackId: id, metadataHash: snapshot.hash, metadata: snapshot.document, audioPath: track.audioPath, audioHash: track.audioHash };
     try {
@@ -124,3 +126,4 @@ export class MetadataService {
     });
   }
 }
+

@@ -8,13 +8,13 @@ const os=require('node:os');
 const {JsonRpcProvider,HDNodeWallet,Contract,Interface,formatEther,TypedDataEncoder}=require('ethers');
 const {wav}=require('./helpers/track-fixtures.cjs');
 const enabled=process.env.CHAIN_TEST==='1' && process.env.SCHEMA_TEST_MYSQL_SOCKET;
-test('REAL Hardhat + MySQL + HTTP registration, sale, NFT, splitter, withdrawal and durable event sync (AI/IPFS fixtures only)',{skip:!enabled},async t=>{
+test(process.env.SERVICE_AUDIO ? 'REAL AI + IPFS + Hardhat + MySQL service workflow' : 'REAL Hardhat + MySQL + HTTP registration, sale, NFT, splitter, withdrawal and durable event sync (AI/IPFS fixtures only)',{skip:!enabled},async t=>{
  const socket=process.env.SCHEMA_TEST_MYSQL_SOCKET,database=`track_chain_e2e_${process.pid}`,mysql=process.env.SCHEMA_TEST_MYSQL_BIN||'mysql';
  const sql=(s,use=true)=>execFileSync(mysql,['--no-defaults',`--socket=${socket}`,'-u','root','--batch','--skip-column-names',...(use?[database]:[])],{input:s,encoding:'utf8',stdio:['pipe','pipe','pipe']});
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'track-chain-e2e-'));
  const manifest=JSON.parse(readFileSync(path.resolve(__dirname,'../src/blockchain/deployment.json'),'utf8'));
  const verifier=HDNodeWallet.fromPhrase('test test test test test test test test test test test junk',undefined,"m/44'/60'/0'/0/1");
- Object.assign(process.env,{DATABASE_URL:`mysql://root@localhost/${database}?socket=${encodeURIComponent(socket)}`,UPLOAD_DIR:root,METADATA_DIR:path.join(root,'metadata'),JWT_ACCESS_SECRET:'chain-e2e-access',JWT_REFRESH_SECRET:'chain-e2e-refresh',NODE_ENV:'development',COOKIE_SECURE:'false',FRONTEND_URL:'http://localhost:3000',AI_PROVIDER_MODE:'unconfigured',PAYMENT_PROVIDER_MODE:'unconfigured',BLOCKCHAIN_NETWORK:'hardhat',BLOCKCHAIN_RPC_URL:'http://127.0.0.1:8545',BLOCKCHAIN_CHAIN_ID:'31337',BLOCKCHAIN_CONFIRMATIONS:'1',VERIFICATION_SIGNER_ADDRESS:verifier.address,VERIFICATION_SIGNER_PRIVATE_KEY:verifier.privateKey,TRACK_REGISTRY_ADDRESS:manifest.TrackRegistry,LICENSE_NFT_ADDRESS:manifest.LicenseNFT,LICENSE_MARKETPLACE_ADDRESS:manifest.LicenseMarketplace,REVENUE_SPLITTER_ADDRESS:manifest.RevenueSplitter,EIP712_DOMAIN_NAME:'TrackAI_Registry',EIP712_DOMAIN_VERSION:'1',EIP712_PRIMARY_TYPE:'RegisterTrack',EIP712_FIELD_TYPES_JSON:'{}',EIP712_HASHING_JSON:'{}'});
+ Object.assign(process.env,{DATABASE_URL:process.env.SCHEMA_TEST_DATABASE_URL ? process.env.SCHEMA_TEST_DATABASE_URL.replace(/\/[^/]*$/,`/${database}`) : `mysql://root@localhost/${database}?socket=${encodeURIComponent(socket)}`,UPLOAD_DIR:root,METADATA_DIR:path.join(root,'metadata'),JWT_ACCESS_SECRET:'chain-e2e-access',JWT_REFRESH_SECRET:'chain-e2e-refresh',NODE_ENV:'development',COOKIE_SECURE:'false',FRONTEND_URL:'http://localhost:3000',AI_PROVIDER_MODE:process.env.SERVICE_AUDIO?'http':'unconfigured',STORAGE_PROVIDER_MODE:process.env.SERVICE_AUDIO?'kubo':'unconfigured',PAYMENT_PROVIDER_MODE:'unconfigured',BLOCKCHAIN_NETWORK:'hardhat',BLOCKCHAIN_RPC_URL:'http://127.0.0.1:8545',BLOCKCHAIN_CHAIN_ID:'31337',BLOCKCHAIN_CONFIRMATIONS:'1',VERIFICATION_SIGNER_ADDRESS:verifier.address,VERIFICATION_SIGNER_PRIVATE_KEY:verifier.privateKey,TRACK_REGISTRY_ADDRESS:manifest.TrackRegistry,LICENSE_NFT_ADDRESS:manifest.LicenseNFT,LICENSE_MARKETPLACE_ADDRESS:manifest.LicenseMarketplace,REVENUE_SPLITTER_ADDRESS:manifest.RevenueSplitter,EIP712_DOMAIN_NAME:'TrackAI_Registry',EIP712_DOMAIN_VERSION:'1',EIP712_PRIMARY_TYPE:'RegisterTrack',EIP712_FIELD_TYPES_JSON:'{}',EIP712_HASHING_JSON:'{}'});
  sql(`CREATE DATABASE \`${database}\`;`,false);
  const {prisma:db}=require('../dist/utils/prisma');
  const {chainClient:chain,ChainClient}=require('../dist/blockchain/client');
@@ -44,7 +44,7 @@ test('REAL Hardhat + MySQL + HTTP registration, sale, NFT, splitter, withdrawal 
   const creatorBefore=await chain.contracts.RevenueSplitter.getPendingRevenue(creator.address), collaboratorBefore=await chain.contracts.RevenueSplitter.getPendingRevenue(collaborator.address);
   const form=new FormData();form.set('title','Actual Hardhat rights');form.set('audio',new Blob([wav()],{type:'audio/wav'}),'actual.wav');
   // Unique file content per run prevents collisions with older chain test registrations.
-  const bytes=wav();require('node:crypto').randomBytes(8).copy(bytes,bytes.length-8);form.set('audio',new Blob([bytes],{type:'audio/wav'}),'actual.wav');
+  const bytes=process.env.SERVICE_AUDIO?readFileSync(process.env.SERVICE_AUDIO):wav();if(!process.env.SERVICE_AUDIO)require('node:crypto').randomBytes(8).copy(bytes,bytes.length-8);form.set('audio',new Blob([bytes]),process.env.SERVICE_AUDIO?path.basename(process.env.SERVICE_AUDIO):'actual.wav');
   const upload=await fetch(base+'/api/tracks',{method:'POST',headers:{Authorization:`Bearer ${creator.token}`},body:form});assert.equal(upload.status,201);const track=await upload.json(),route=`/api/tracks/${track.id}`;
   await ok('POST',route+'/contributors',creator.token,{userId:creator.id,role:'COMPOSER',percentage:60},201);
   await ok('POST',route+'/contributors',creator.token,{userId:collaborator.id,role:'PRODUCER',percentage:40},201);
@@ -52,11 +52,20 @@ test('REAL Hardhat + MySQL + HTTP registration, sale, NFT, splitter, withdrawal 
   const {RightsRepository}=require('../dist/repositories/rights.repository'),repo=new RightsRepository(db);
   const {VerificationService}=require('../dist/services/verification.service');
   // TEST-ONLY fixture: production AI/IPFS providers remain unconfigured. Chain proof is real RPC.
+  if(process.env.SERVICE_AUDIO) {
+   const verification=await ok('POST',route+'/verify',creator.token,{},202);
+   assert.equal(verification.status,'VERIFIED',JSON.stringify(verification));
+   assert.equal(verification.evidence?.decision,'PASS','Use a nonduplicate PASS sample; WARN/HOLD require review');
+   await ok('POST',route+'/metadata/prepare',creator.token,{},201);
+   await ok('POST',route+'/metadata/upload',creator.token,{});
+  } else {
   await new VerificationService(repo,{source:'AI',verify:async()=>({duplicate:false,riskScore:0.82,status:'WARN',modelVersion:'TEST_FIXTURE_NOT_REAL_AI',similarTracks:[]})}).request(track.id,creator.id);
   const {MetadataService}=require('../dist/services/metadata.service');
   const cid='bafkreigh2akiscaildc6o6p2nhccz3u5c6afgzkgkbb37faqxnxm6woj5m';
   const metadata=new MetadataService(repo,{configured:true,upload:async input=>({source:'REAL',metadataHash:input.metadataHash,metadataCid:cid}),verify:async(input,result)=>input.metadataHash===result.metadataHash},path.join(root,'metadata'));
   await metadata.prepare(track.id,creator.id,{});await metadata.upload(track.id,creator.id);
+  }
+  const cid=(await db.track.findUniqueOrThrow({where:{id:track.id}})).metadataCid;
   const packet=await ok('POST',route+'/registration-payload',creator.token,{},202);
   assert.equal(packet.ready,true);assert.equal(packet.typedData.primaryType,'RegisterTrack');assert.equal(packet.typedData.domain.name,'TrackAI_Registry');assert.ok(!JSON.stringify(packet).includes(verifier.privateKey));
   const send=async(user,tx)=>{assert.equal(tx.chainId,'31337');const response=await user.account.sendTransaction({to:tx.to,data:tx.data,value:BigInt(tx.value)});await response.wait();return response.hash;};
@@ -144,9 +153,10 @@ test('REAL Hardhat + MySQL + HTTP registration, sale, NFT, splitter, withdrawal 
   const originalAnchor=chain.manifest.anchorHash;chain.manifest.anchorHash='0x'+'0'.repeat(64);assert.equal((await chain.health()).connected,false);chain.manifest.anchorHash=originalAnchor;
   assert.equal((await chain.health()).connected,true);
   const oldUrl=process.env.BLOCKCHAIN_RPC_URL;process.env.BLOCKCHAIN_RPC_URL='http://127.0.0.1:18545';const offline=new ChainClient();try{assert.equal((await offline.health()).connected,false);}finally{await offline.provider.destroy();process.env.BLOCKCHAIN_RPC_URL=oldUrl;}
-  t.diagnostic('Real Hardhat RPC/receipts/ERC1155/splitter/MySQL validated; AI and IPFS are labeled TEST-ONLY fixtures.');
+  t.diagnostic(process.env.SERVICE_AUDIO ? 'Real AI HTTP analysis, Kubo content verification, Hardhat receipts/ERC1155 and MySQL validated.' : 'Real Hardhat RPC/receipts/ERC1155/splitter/MySQL validated; AI and IPFS are labeled TEST-ONLY fixtures.');
  } finally {
   if(server) await new Promise(resolve=>{server.closeAllConnections();server.close(resolve);});
   await db.$disconnect();await chain.provider.destroy();sql(`DROP DATABASE \`${database}\`;`,false);await fs.rm(root,{recursive:true,force:true});
  }
 });
+

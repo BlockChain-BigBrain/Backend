@@ -1,3 +1,4 @@
+import { aiRequiresReview } from "../providers/http-ai.provider";
 import { chainClient } from "../blockchain/client";
 import { formatEther, parseEther } from "ethers";
 import { Prisma } from "@prisma/client";
@@ -10,7 +11,7 @@ import { trackId } from "../dto/track.dto";
 
 export function eligibleTrack(track: RightsTrack, real: boolean) {
   const verification = track.verifications[0];
-  if (!verification || verification.status !== "VERIFIED" || verification.duplicate !== false || verification.riskScore === null || !["PASS", "WARN"].includes(verification.riskStatus ?? "") || riskStatus(verification.riskScore.toNumber()) !== verification.riskStatus || !["AI", "MOCK"].includes(verification.source)) throw new AppError(409, "Track has no eligible verification or is duplicate/HOLD");
+  if (!verification || verification.status !== "VERIFIED" || verification.duplicate !== false || aiRequiresReview(verification.evidence) || verification.riskScore === null || !["PASS", "WARN"].includes(verification.riskStatus ?? "") || riskStatus(verification.riskScore.toNumber()) !== verification.riskStatus || !["AI", "MOCK"].includes(verification.source)) throw new AppError(409, "Track has no eligible verification or is duplicate/HOLD");
   if (!track.contributionsFinalizedAt) throw new AppError(409, "Contributions must be finalized");
   creatorShares(track);
   if (real) {
@@ -125,3 +126,4 @@ export class MarketplaceService {
     return { ...result, page, limit };
   }
 }
+

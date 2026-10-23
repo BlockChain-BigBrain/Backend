@@ -79,3 +79,25 @@ for (const operation of operations) {
     responses:{...errorResponses,[String(status)]:{description:"요청 처리",...(status===204?{}:{content:json(operation.response ?? {type:"object"})})}},
   };
 }
+
+
+/**
+ * @openapi
+ * /api/tracks/{id}/metadata/upload:
+ *   post:
+ *     tags: [Rights]
+ *     summary: Upload prepared public metadata and audio to configured IPFS and verify both content hashes
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *     responses:
+ *       '200': { description: Verified IPFS CIDs stored in metadata snapshot }
+ *       '401': { description: Authentication required }
+ *       '403': { description: Track owner required }
+ *       '409': { description: Metadata stale or registration already pending/complete }
+ *       '502': { description: IPFS upload or content verification failed }
+ *       '503': { description: IPFS provider not configured }
+ */
