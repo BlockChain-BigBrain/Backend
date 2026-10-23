@@ -28,6 +28,7 @@ export class RightsController {
   readonly verifications = this.handler((s, _req, id, userId) => s.verifications.history(id, userId));
   readonly metadata = this.handler((s, _req, id, userId) => s.metadata.preview(id, userId));
   readonly prepareMetadata = this.handler((s, req, id, userId) => s.metadata.prepare(id, userId, req.body ?? {}), 201);
+  readonly uploadMetadata = this.handler((s, _req, id, userId) => s.metadata.upload(id, userId));
   readonly ipfs = this.handler((s, _req, id, userId) => s.metadata.status(id, userId));
   readonly register = this.handler((s, _req, id, userId) => s.blockchain.register(id, userId), 202);
   readonly payload = this.handler((s, _req, id, userId) => s.blockchain.payload(id, userId));
@@ -52,3 +53,4 @@ export class RightsController {
   readonly revenueHistory = this.handler((s, req, _id, userId) => s.revenue.history(userId, req.query));
   readonly withdraw = this.handler((s, req, _id, userId) => s.revenue.withdraw(userId, req.body), 202);
 }
+

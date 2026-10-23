@@ -191,6 +191,7 @@ model Contribution {
 }
 
 model Verification {
+  evidence          Json?
   id                Int                @id @default(autoincrement())
   trackId           Int
   status            VerificationStatus @default(PENDING)
@@ -214,6 +215,7 @@ model Verification {
 }
 
 model SimilarityResult {
+  externalTrackId String? @db.VarChar(191)
   id              Int           @id @default(autoincrement())
   trackId         Int
   verificationId  Int?
@@ -446,3 +448,4 @@ model BlockchainCursor {
   blockNumber BigInt @db.UnsignedBigInt
   blockHash   String @db.VarChar(66)
 }
+

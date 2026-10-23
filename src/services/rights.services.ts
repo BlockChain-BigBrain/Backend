@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { chainClient } from "../blockchain/client";
+import { HttpAiVerificationProvider } from "../providers/http-ai.provider";
+import { KuboStorageProvider } from "../providers/kubo-storage.provider";
 import { config } from "../config";
 import { MockAiVerificationProvider, UnconfiguredAiVerificationProvider } from "../providers/ai.provider";
 import { UnconfiguredBlockchainProvider } from "../providers/blockchain.provider";
@@ -20,8 +22,8 @@ export function createRightsServices(db: PrismaClient) {
   return {
     wallet: new WalletService(repo),
     contributions: new ContributionService(repo),
-    verifications: new VerificationService(repo, config.aiProviderMode === "mock" ? new MockAiVerificationProvider() : new UnconfiguredAiVerificationProvider()),
-    metadata: new MetadataService(repo, new UnconfiguredStorageProvider()),
+    verifications: new VerificationService(repo, config.aiProviderMode === "http" ? new HttpAiVerificationProvider() : config.aiProviderMode === "mock" ? new MockAiVerificationProvider() : new UnconfiguredAiVerificationProvider()),
+    metadata: new MetadataService(repo, config.storageProviderMode === "kubo" ? new KuboStorageProvider() : new UnconfiguredStorageProvider()),
     blockchain: new BlockchainService(repo, chainClient.configured ? chainClient : new UnconfiguredBlockchainProvider()),
     marketplace: new MarketplaceService(repo),
     licenses: new LicenseService(repo, chainClient.configured ? new UnconfiguredPaymentProvider() : config.paymentProviderMode === "mock" ? new MockPaymentProvider() : new UnconfiguredPaymentProvider()),
@@ -29,3 +31,4 @@ export function createRightsServices(db: PrismaClient) {
   };
 }
 export type RightsServices = ReturnType<typeof createRightsServices>;
+
