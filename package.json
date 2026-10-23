@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-chain-artifacts.cjs",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -13,7 +13,9 @@
     "prisma:seed:example": "node prisma/seed-example.cjs",
     "test:local": "npm run build && node scripts/test-local-flow.cjs",
     "db:check": "node scripts/check-database.cjs",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "blockchain:import": "node scripts/import-contract.cjs",
+    "test:blockchain": "npm run build && node --test tests/blockchain-e2e.test.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",

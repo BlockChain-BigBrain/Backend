@@ -48,7 +48,7 @@ export class RevenueService {
     ]);
     return { items, total, page, limit };
   }
-  async withdraw(userId: number, value: unknown) {
+  async withdraw(userId: number, value: unknown, walletAddress?: string) {
     const input = body(value, ["amount", "currency", "idempotencyKey"]), unit = currency(input.currency), amount = money(input.amount, unit);
     if (input.idempotencyKey !== undefined && (typeof input.idempotencyKey !== "string" || !/^[A-Za-z0-9:_-]{1,100}$/.test(input.idempotencyKey))) throw new AppError(400, "Invalid idempotencyKey");
     // This is a preparation record, not a reservation of withdrawable funds or a payout.
@@ -58,11 +58,11 @@ export class RevenueService {
       if (reference) {
         const existing = await tx.revenueWithdrawal.findUnique({ where: { paymentReference: reference } });
         if (existing) {
-          if (existing.userId !== userId || !existing.amount.eq(amount) || existing.currency !== unit) throw new AppError(409, "Idempotency key reused with different values");
+          if (existing.userId !== userId || (!walletAddress && !existing.amount.eq(amount)) || existing.currency !== unit || (walletAddress && existing.walletAddress !== walletAddress)) throw new AppError(409, "Idempotency key reused with different values");
           return { ...existing, supported: false };
         }
       }
-      const request = await tx.revenueWithdrawal.create({ data: { userId, amount, currency: unit, status: "PREPARING", paymentReference: reference } });
+      const request = await tx.revenueWithdrawal.create({ data: { userId, amount, currency: unit, walletAddress, status: "PREPARING", paymentReference: reference } });
       return { ...request, supported: false };
     });
   }

@@ -8,6 +8,7 @@ export interface RegistrationReceipt extends RegistrationExpectation {
 }
 export interface BlockchainProvider {
   readonly configured: boolean;
+  registrationNonce?(txHash: string, registrant: string): Promise<string>;
   verifyRegistration(expected: RegistrationExpectation): Promise<RegistrationReceipt>;
 }
 export class UnconfiguredBlockchainProvider implements BlockchainProvider {

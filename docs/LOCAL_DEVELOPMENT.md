@@ -1,3 +1,5 @@
+> 실제 Hardhat 연동은 [BLOCKCHAIN_LOCAL_SETUP.md](BLOCKCHAIN_LOCAL_SETUP.md)를 참조한다. 아래 Mock 흐름은 기본 미설정 모드의 안내다. 최신 실제 체인 포함 검증 결과는 Backend 52 passed, 0 failed, 0 skipped / Contract 51 passed다.
+
 # 로컬 개발 및 검증
 
 Node.js/TypeScript/Express/Prisma 6/MySQL 구조를 유지한다. 테스트는 Node의 내장 node:test를 사용한다. 클라우드 배포 또는 CI/CD 설정을 추가하지 않았다.

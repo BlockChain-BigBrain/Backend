@@ -29,7 +29,7 @@ export class LicenseService {
         return previous;
       }
       if (await tx.purchaseRequest.findFirst({ where: { activeBuyerTrackType: `${userId}:${id}:${type}:${preparation ? "preparation" : "live"}` } }) || await tx.license.findFirst({ where: { trackId: id, buyerId: userId, type, source: "REAL", licenseStatus: "COMPLETED" } })) throw new AppError(409, "License purchase already exists");
-      const request = await tx.purchaseRequest.create({ data: { trackId: id, buyerId: userId, listingId: listing.id, licenseType: type, price: listing.price, currency: listing.currency, preparation, source: preparation ? this.payment.source === "MOCK" ? "MOCK" : "UNCONFIGURED" : "UNCONFIGURED", idempotencyKey: key, activeBuyerTrackType: `${userId}:${id}:${type}:${preparation ? "preparation" : "live"}`, contributorSnapshot: creatorShares(track) as Prisma.InputJsonValue } });
+      const request = await tx.purchaseRequest.create({ data: { trackId: id, buyerId: userId, listingId: listing.id, licenseType: type, price: listing.price, currency: listing.currency, preparation, buyerWalletAddress: (await tx.user.findUniqueOrThrow({where:{id:userId}})).walletAddress, source: preparation ? this.payment.source === "MOCK" ? "MOCK" : "UNCONFIGURED" : "UNCONFIGURED", idempotencyKey: key, activeBuyerTrackType: `${userId}:${id}:${type}:${preparation ? "preparation" : "live"}`, contributorSnapshot: creatorShares(track) as Prisma.InputJsonValue } });
       await tx.transaction.create({ data: { trackId: id, userId, purchaseRequestId: request.id, amount: listing.price, currency: listing.currency, status: "PENDING", source: request.source } });
       return request;
     });
@@ -57,6 +57,7 @@ export class LicenseService {
     return this.repo.purchase(id, userId, async (tx, request) => {
       if (request.status === "CANCELLED") return request;
       if (request.status !== "PENDING_PAYMENT") throw new AppError(409, "Only unpaid purchase requests may be cancelled");
+      if (!request.preparation && request.currency === "ETH" && request.buyerWalletAddress) throw new AppError(409, "A wallet purchase cannot be cancelled in the DB; its transaction may still execute on chain");
       if (request.transaction) await tx.transaction.update({ where: { id: request.transaction.id }, data: { status: "FAILED", failureReason: "Purchase cancelled" } });
       return tx.purchaseRequest.update({ where: { id }, data: { status: "CANCELLED", activeBuyerTrackType: null } });
     });
@@ -81,9 +82,10 @@ export class LicenseService {
         return tx.purchaseRequest.update({ where: { id }, data: { status: "FAILED", activeBuyerTrackType: null, failureReason: "Payment provider rejected the purchase" } });
       }
       if (!receipt.paymentConfirmed) return current;
-      eligibleTrack(track, receipt.source === "REAL");
+      const settledOnChain = receipt.source === "REAL" && receipt.chainId === "31337" && receipt.blockNumber !== undefined && receipt.allocations !== undefined;
+      if(!settledOnChain) eligibleTrack(track, receipt.source === "REAL");
       const listing = await tx.marketplaceListing.findUniqueOrThrow({ where: { id: current.listingId } });
-      if (receipt.source === "REAL" && listing.status !== "ACTIVE" || receipt.source === "MOCK" && listing.status === "INACTIVE") throw new AppError(409, "Listing is no longer available");
+      if (receipt.source === "REAL" && !settledOnChain && listing.status !== "ACTIVE" || receipt.source === "MOCK" && listing.status === "INACTIVE") throw new AppError(409, "Listing is no longer available");
       const realComplete = receipt.source === "REAL" && receipt.mintConfirmed;
       const simulated = receipt.source === "MOCK" && receipt.mintConfirmed;
       const confirmedAt = realComplete ? new Date() : null;
@@ -91,10 +93,10 @@ export class LicenseService {
       await tx.license.update({ where: { id: license.id }, data: { licenseStatus: realComplete ? "COMPLETED" : "PENDING_MINT", source: receipt.source, issuedAt: confirmedAt, purchaseTxHash: receipt.source === "REAL" ? receipt.txHash : null, tokenId: realComplete ? receipt.tokenId : null } });
       const transaction = await tx.transaction.upsert({ where: { purchaseRequestId: id }, create: {
         trackId: current.trackId, userId, licenseId: license.id, purchaseRequestId: id, amount: current.price, currency: current.currency, source: receipt.source, paymentReference: receipt.paymentReference,
-        status: realComplete || simulated ? "COMPLETED" : "PENDING", confirmedAt, txHash: receipt.source === "REAL" ? receipt.txHash : null,
-      }, update: { licenseId: license.id, source: receipt.source, status: realComplete || simulated ? "COMPLETED" : "PENDING", confirmedAt, paymentReference: receipt.paymentReference, txHash: receipt.source === "REAL" ? receipt.txHash : null } });
+        chainId: receipt.chainId, blockNumber: receipt.blockNumber, status: realComplete || simulated ? "COMPLETED" : "PENDING", confirmedAt, txHash: receipt.source === "REAL" ? receipt.txHash : null,
+      }, update: { chainId: receipt.chainId, blockNumber: receipt.blockNumber, licenseId: license.id, source: receipt.source, status: realComplete || simulated ? "COMPLETED" : "PENDING", confirmedAt, paymentReference: receipt.paymentReference, txHash: receipt.source === "REAL" ? receipt.txHash : null } });
       if (realComplete || simulated) {
-        const rows = allocateRevenue(current.price, current.currency, current.contributorSnapshot as unknown as RevenueShare[]);
+        const rows = receipt.source === "REAL" && receipt.allocations ? receipt.allocations : allocateRevenue(current.price, current.currency, current.contributorSnapshot as unknown as RevenueShare[]);
         for (const row of rows) await tx.revenueAllocation.upsert({ where: { transactionId_userId: { transactionId: transaction.id, userId: row.userId } }, create: { ...row, transactionId: transaction.id, confirmedAt }, update: {} });
       }
       return tx.purchaseRequest.update({ where: { id }, data: { licenseId: license.id, status: realComplete ? "COMPLETED" : simulated ? "SIMULATED" : "PENDING_MINT", source: receipt.source, confirmedAt, ...(simulated ? { activeBuyerTrackType: null } : {}) } });

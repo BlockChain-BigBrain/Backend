@@ -160,4 +160,17 @@ SCHEMA_TEST_MYSQL_SOCKET=/path/to/disposable-mysql.sock \
 SCHEMA_TEST_MYSQL_BIN=/path/to/mysql npm test
 ```
 
-실제 외부 서비스/컨트랙트 연결과 프론트 통합은 아직 진행하지 않았습니다. 이번 작업에서는 기존 .env DB에도 자동으로 마이그레이션을 적용하지 않았으므로 로컬 대상 DB를 확인한 뒤 `npm run prisma:deploy`와 `npm run prisma:generate`를 실행하세요.
+Hardhat 로컬 실제 계약 연동과 DB 동기화는 구현·검증했습니다. 실제 AI/IPFS와 프론트 지갑 UI는 별도 연동이 필요합니다. 이번 작업에서는 기존 .env DB에도 자동으로 마이그레이션을 적용하지 않았으므로 로컬 대상 DB를 확인한 뒤 `npm run prisma:deploy`와 `npm run prisma:generate`를 실행하세요.
+
+## Desktop Contract 실제 연동
+
+[로컬 실행 가이드](docs/BLOCKCHAIN_LOCAL_SETUP.md)와 [구현·검증 보고](docs/BLOCKCHAIN_IMPLEMENTATION.md)를 참조하세요. `BLOCKCHAIN_NETWORK=hardhat`에서 실제 등록·가격·구매·ERC1155·수익·출금 영수증을 검증합니다. 전체 검증은 실제 Hardhat + 임시 MySQL에서 52 passed / 0 failed / 0 skipped입니다. AI/IPFS만 테스트 fixture입니다.
+
+```sh
+node scripts/import-contract.cjs ../Contract
+node scripts/setup-hardhat-env.cjs
+npm run build
+BLOCKCHAIN_ENV_FILE=.env.blockchain.local npm run dev
+```
+
+먼저 Contract localhost 노드/배포와 대상 DB의 `npm run prisma:deploy`가 필요합니다. 위 overlay는 기존 `.env`의 DB/Auth를 바꾸지 않습니다.

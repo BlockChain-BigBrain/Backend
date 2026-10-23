@@ -167,12 +167,12 @@ test('complete local rights workflow, mock isolation, trusted receipt fixtures a
     assert.equal((await call('PATCH',trackRoute,creator.token,{title:'Locked'})).status,409);
     const badChain=new BlockchainService(repo,{...chainFixture,verifyRegistration:async expected=>({...expected,source:'REAL',confirmed:true,confirmations:2,blockchainTrackId:'77',nonce:'incorrect'})},options);
     await assert.rejects(badChain.confirm(id,creator.id,'0x'+'a'.repeat(64)),{statusCode:502});
-    await assert.rejects(blockchain.register(id,creator.id),{statusCode:409});
+    assert.equal((await blockchain.register(id,creator.id)).request.id,signed.request.id);
     const oldNonce=signed.request.nonce;await db.registrationRequest.update({where:{id:signed.request.id},data:{deadline:new Date(0)}});
     await assert.rejects(blockchain.confirm(id,creator.id,'0x'+'a'.repeat(64)),{statusCode:409});
     signed=await blockchain.register(id,creator.id);assert.notEqual(signed.request.nonce,oldNonce);
     await blockchain.confirm(id,creator.id,'0x'+'a'.repeat(64));
-    await assert.rejects(blockchain.confirm(id,creator.id,'0x'+'a'.repeat(64)),{statusCode:409});
+    assert.equal((await blockchain.confirm(id,creator.id,'0x'+'a'.repeat(64))).registrationStatus,'REGISTERED');
     const active=await call('PATCH',`/api/market/tracks/${listingId}`,creator.token,{status:'ACTIVE'});assert.equal(active.status,200);
     const publicMarket=await call('GET','/api/market/tracks?currency=USD&sort=price&search=Summer&minPrice=99&maxPrice=101');assert.equal(publicMarket.result.total,1);assert.equal(publicMarket.result.items[0].warning,true);
     assert.equal((await call('GET','/api/market/tracks?sort=price')).status,400);

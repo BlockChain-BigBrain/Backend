@@ -19,6 +19,7 @@ export function createRightsRoutes(controller: RightsController) {
   post(`${track}/verify`, controller.verify); post(`${track}/reverify`, controller.reverify);
   read(`${track}/verification`, controller.verification); read(`${track}/verifications`, controller.verifications, true);
   read(`${track}/metadata`, controller.metadata, true); post(`${track}/metadata/prepare`, controller.prepareMetadata); read(`${track}/ipfs`, controller.ipfs, true);
+  post(`${track}/registration-payload`, controller.register); post(`${track}/registration/confirm`, controller.confirm);
   post(`${track}/register`, controller.register); post(`${track}/register/confirm`, controller.confirm); post(`${track}/register/cancel`, controller.cancelRegistration);
   read(`${track}/registration-payload`, controller.payload, true); read(`${track}/blockchain`, controller.blockchain, true);
   post("/market/tracks", controller.marketCreate); read("/market/tracks", controller.marketList); read("/market/tracks/:id", controller.marketGet);

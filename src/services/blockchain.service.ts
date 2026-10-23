@@ -1,3 +1,4 @@
+import { chainClient } from "../blockchain/client";
 import { randomBytes } from "node:crypto";
 import { AbiCoder, id as utf8Hash, keccak256, TypedDataEncoder, Wallet, verifyTypedData } from "ethers";
 import { Prisma, RegistrationRequest } from "@prisma/client";
@@ -32,7 +33,7 @@ export function blockchainOptions(): BlockchainOptions {
   if (order.length !== 8 || new Set(order).size !== 8 || order.some(field => !(field in fields))) throw new Error("Invalid EIP712_FIELD_ORDER");
   const ttlSeconds = Number(process.env.REGISTRATION_TTL_SECONDS ?? 900), confirmations = Number(process.env.BLOCKCHAIN_CONFIRMATIONS ?? 2);
   if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 60 || ttlSeconds > 86400 || !Number.isSafeInteger(confirmations) || confirmations < 1) throw new Error("Invalid blockchain expiry/confirmations");
-  const primaryType = process.env.EIP712_PRIMARY_TYPE ?? "TrackVerification";
+  const primaryType = process.env.EIP712_PRIMARY_TYPE ?? "RegisterTrack";
   if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(primaryType) || primaryType === "EIP712Domain") throw new Error("Invalid EIP712_PRIMARY_TYPE");
   let fieldTypes: Record<keyof typeof fields, string> = { ...fields };
   let hashingRules: HashingRules = { ...defaultHashing };
@@ -49,10 +50,11 @@ export function blockchainOptions(): BlockchainOptions {
   } catch { throw new Error("Invalid EIP712_FIELD_TYPES_JSON or EIP712_HASHING_JSON"); }
   const options: BlockchainOptions = {
     chainId, contractAddress: process.env.TRACK_REGISTRY_ADDRESS || undefined,
-    name: process.env.EIP712_DOMAIN_NAME ?? "TrackRegistry", version: process.env.EIP712_DOMAIN_VERSION ?? "1", primaryType,
+    name: process.env.EIP712_DOMAIN_NAME ?? "TrackAI_Registry", version: process.env.EIP712_DOMAIN_VERSION ?? "1", primaryType,
     fieldTypes, hashingRules, fieldOrder: order as Array<keyof typeof fields>, signingKey: process.env.VERIFICATION_SIGNER_PRIVATE_KEY || undefined,
     signerAddress: process.env.VERIFICATION_SIGNER_ADDRESS || undefined, ttlSeconds, confirmations,
   };
+  if (network === "hardhat" && (options.name!=="TrackAI_Registry" || options.version!=="1" || options.primaryType!=="RegisterTrack" || JSON.stringify(options.fieldOrder)!==JSON.stringify(Object.keys(fields)) || Object.entries(fields).some(([key,type])=>fieldTypes[key as keyof typeof fields]!==type) || JSON.stringify(hashingRules)!==JSON.stringify(defaultHashing))) throw new Error("Hardhat EIP-712 settings must match TrackRegistry.sol exactly");
   if (options.contractAddress) options.contractAddress = wallet(options.contractAddress);
   if (options.signingKey) {
     let signer: Wallet;
@@ -75,14 +77,15 @@ export function registrationPrerequisites(track: RightsTrack, options: Blockchai
   if (!options.signingKey || !options.signerAddress) missing.push("verificationSigner");
   return [...new Set(missing)];
 }
-export function typedRegistration(track: RightsTrack, request: RegistrationRequest, options: BlockchainOptions) {
-  if (request.deadline.getTime() <= Date.now()) throw new AppError(409, "Registration signature is expired");
+export function typedRegistration(track: RightsTrack, request: RegistrationRequest, options: BlockchainOptions, allowMinedExpired = false) {
+  if (!allowMinedExpired && request.deadline.getTime() <= Date.now()) throw new AppError(409, "Registration signature is expired");
   const missing = registrationPrerequisites(track, options);
   if (missing.length) return { ready: false as const, missing, typedData: null };
   const shares = creatorShares(track);
   const hashing = options.hashingRules ?? defaultHashing, fieldTypes = options.fieldTypes ?? fields;
   const addresses = shares.map(item => item.walletAddress);
-  const percentages = shares.map(item => BigInt(new Prisma.Decimal(item.percentage).mul(hashing.percentageScale).toFixed(0)));
+  if (hashing.percentageScale === 100 && shares.some(item => !new Prisma.Decimal(item.percentage).isInteger())) throw new AppError(409, "Contract requires integer contributor percentages");
+  const percentages = shares.map(item => BigInt(new Prisma.Decimal(item.percentage).mul(hashing.percentageScale / 100).toFixed(0)));
   const encoded = hashing.contributorsEncoding === "ABI_ARRAYS"
     ? AbiCoder.defaultAbiCoder().encode(["address[]", "uint256[]"], [addresses, percentages])
     : AbiCoder.defaultAbiCoder().encode(["tuple(address wallet,uint256 percentage)[]"], [addresses.map((address, index) => [address, percentages[index]])]);
@@ -99,17 +102,29 @@ export function typedRegistration(track: RightsTrack, request: RegistrationReque
 }
 export class BlockchainService {
   constructor(private readonly repo: RightsRepository, private readonly provider: BlockchainProvider, private readonly options: BlockchainOptions = blockchainOptions()) {}
+  transaction(track: RightsTrack, packet: any, signature: string) {
+    if (!chainClient.configured || !packet.ready) return undefined;
+    const shares = creatorShares(track);
+    const r = [packet.typedData.value.audioHash, track.metadataCid, shares.map(s => s.walletAddress), shares.map(s => s.percentage.split(".")[0]), packet.typedData.value.similarityScore, packet.typedData.value.modelVersion, packet.typedData.value.nonce, packet.typedData.value.deadline];
+    return chainClient.tx("TrackRegistry", "registerTrack", [r, signature], packet.typedData.value.registrant);
+  }
   async register(id: number, userId: number) {
+    if (chainClient.configured) await chainClient.ready();
     return this.repo.locked(id, async (tx, track) => {
       own(track, userId);
       if (track.registrationStatus === "REGISTERED" || track.registrationTxHash || track.blockchainTrackId) throw new AppError(409, "Track is already registered");
       let request = track.registrationRequests[0];
-      if (request?.status === "PENDING" && request.deadline.getTime() > Date.now() && request.signature) throw new AppError(409, "Registration is already pending");
+      if (request?.status === "PENDING" && request.deadline.getTime() > Date.now() && request.signature) {
+        const existing = typedRegistration(track, request, this.options), stored = request.typedData as any;
+        if (!existing.ready || !stored || TypedDataEncoder.hash(stored.domain, stored.types, stored.value) !== TypedDataEncoder.hash(existing.typedData.domain, existing.typedData.types, existing.typedData.value)) throw new AppError(409, "Signed registration changed");
+        return { request, ...existing, signature: request.signature, transaction: this.transaction(track, existing, request.signature), sent: false };
+      }
       if (!request || request.status !== "PENDING" || request.deadline.getTime() <= Date.now()) {
         if (request?.status === "PENDING") await tx.registrationRequest.update({ where: { id: request.id }, data: { status: "FAILED", errorCode: "EXPIRED", errorMessage: "Signature expired" } });
         request = await tx.registrationRequest.create({ data: { trackId: id, nonce: BigInt(`0x${randomBytes(32).toString("hex")}`).toString(), deadline: new Date(Date.now() + this.options.ttlSeconds * 1000), chainId: this.options.chainId, contractAddress: this.options.contractAddress } });
       }
       const payload = typedRegistration(track, request, this.options);
+      if(chainClient.configured && payload.ready && await chainClient.contracts.TrackRegistry.usedNonces(payload.typedData.value.registrant, request.nonce)) throw new AppError(409,"Registration nonce already used on chain; confirm its transaction");
       if (!payload.ready) {
         await tx.track.update({ where: { id }, data: { registrationStatus: "NOT_REGISTERED" } });
         return { request, ...payload, stage: "PREPARATION", sent: false };
@@ -121,7 +136,7 @@ export class BlockchainService {
       if (verifyTypedData(domain, types, value, signature).toLowerCase() !== wallet(this.options.signerAddress)) throw new AppError(503, "Signature validation failed");
       request = await tx.registrationRequest.update({ where: { id: request.id }, data: { typedData: payload.typedData as Prisma.InputJsonValue, signature, chainId: this.options.chainId, contractAddress: this.options.contractAddress!, metadataSnapshotId: track.metadataSnapshots[0].id } });
       await tx.track.update({ where: { id }, data: { registrationStatus: "PENDING" } });
-      return { request, ...payload, signature, stage: "SIGNED_PREPARATION", sent: false };
+      return { request, ...payload, signature, transaction: this.transaction(track, payload, signature), stage: "SIGNED_PREPARATION", sent: false };
     });
   }
   async payload(id: number, userId: number) {
@@ -132,7 +147,7 @@ export class BlockchainService {
       const stored = request.typedData as any;
       if (!stored || TypedDataEncoder.hash(stored.domain, stored.types, stored.value) !== TypedDataEncoder.hash(packet.typedData.domain, packet.typedData.types, packet.typedData.value) || verifyTypedData(packet.typedData.domain, packet.typedData.types, packet.typedData.value, request.signature).toLowerCase() !== wallet(this.options.signerAddress)) return { ready: false, missing: ["signedPayloadChanged"], typedData: null, signature: null, requestId: request.id };
     }
-    return { ...packet, signature: packet.ready ? request.signature : null, requestId: request.id };
+    return { ...packet, transaction: packet.ready && request.signature ? this.transaction(track, packet, request.signature) : undefined, signature: packet.ready ? request.signature : null, requestId: request.id };
   }
   async status(id: number, userId: number) {
     const track = await this.repo.track(id, userId, true);
@@ -140,9 +155,18 @@ export class BlockchainService {
   }
   async confirm(id: number, userId: number, txHash: string) {
     if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) throw new AppError(400, "Invalid transaction hash");
-    const track = await this.repo.track(id, userId, true), request = track.registrationRequests[0];
-    if (!request || request.status !== "PENDING" || !request.signature || !request.typedData) throw new AppError(409, "Signed registration request is required");
-    const packet = typedRegistration(track, request, this.options);
+    txHash = txHash.toLowerCase();
+    const track = await this.repo.track(id, userId, true);
+    // A transaction mined before expiry can be indexed after a newer signature was
+    // issued. Resolve its signed request by calldata nonce, never by latest row.
+    const nonce=this.provider.registrationNonce ? await this.provider.registrationNonce(txHash,wallet(track.owner.walletAddress)) : undefined;
+    const request=nonce===undefined ? track.registrationRequests[0] : await this.repo.db.registrationRequest.findFirst({where:{trackId:id,nonce}});
+    if (request?.status === "REGISTERED" && request.txHash === txHash && track.registrationStatus === "REGISTERED") {
+      await this.provider.verifyRegistration({ txHash, trackId:id, chainId:request.chainId, contractAddress:request.contractAddress!, nonce:request.nonce, registrant:wallet(track.owner.walletAddress), payloadDigest:TypedDataEncoder.hash((request.typedData as any).domain,(request.typedData as any).types,(request.typedData as any).value) });
+      return track;
+    }
+    if (!request || !(request.status === "PENDING" || request.status === "FAILED" && request.errorCode === "EXPIRED") || !request.signature || !request.typedData) throw new AppError(409, "Signed registration request is required");
+    const packet = typedRegistration(track, request, this.options, true);
     if (!packet.ready) throw new AppError(409, "Registration prerequisites changed");
     const digest = TypedDataEncoder.hash(packet.typedData.domain, packet.typedData.types, packet.typedData.value);
     const stored = request.typedData as any;
@@ -152,13 +176,15 @@ export class BlockchainService {
     if (receipt.source !== "REAL" || receipt.confirmed !== true || !Number.isSafeInteger(receipt.confirmations) || receipt.confirmations < this.options.confirmations || !/^\d{1,78}$/.test(receipt.blockchainTrackId) || BigInt(receipt.blockchainTrackId) >= 2n ** 256n || Object.entries(expectation).some(([key, value]) => receipt[key as keyof typeof receipt] !== value)) throw new AppError(502, "Unverified or mismatched registration receipt");
     return this.repo.locked(id, async (tx, current) => {
       own(current, userId);
-      const latest = current.registrationRequests[0];
-      if (!latest || latest.id !== request.id || latest.status !== "PENDING" || latest.deadline.getTime() <= Date.now()) throw new AppError(409, "Registration request changed or expired");
-      const currentPayload = typedRegistration(current, latest, this.options);
+      const latest = await tx.registrationRequest.findUnique({where:{id:request.id}});
+      if(latest?.id === request.id && latest.status === "REGISTERED" && latest.txHash === txHash && latest.blockchainTrackId === receipt.blockchainTrackId) return current;
+      if (!latest || !(latest.status === "PENDING" || latest.status === "FAILED" && latest.errorCode === "EXPIRED") || current.registrationStatus === "REGISTERED") throw new AppError(409, "Registration request changed or already registered");
+      const currentPayload = typedRegistration(current, latest, this.options, true);
       if (!currentPayload.ready || TypedDataEncoder.hash(currentPayload.typedData.domain, currentPayload.typedData.types, currentPayload.typedData.value) !== digest) throw new AppError(409, "Registration inputs changed");
       const confirmedAt = new Date();
-      await tx.registrationRequest.update({ where: { id: request.id }, data: { status: "REGISTERED", source: "REAL", txHash, blockchainTrackId: receipt.blockchainTrackId, confirmedAt } });
-      return tx.track.update({ where: { id }, data: { registrationStatus: "REGISTERED", registrationTxHash: txHash, blockchainTrackId: receipt.blockchainTrackId } });
+      await tx.registrationRequest.updateMany({where:{trackId:id,id:{not:request.id},status:"PENDING"},data:{status:"FAILED",errorCode:"SUPERSEDED",errorMessage:"Another signed request registered this track on chain"}});
+      await tx.registrationRequest.update({ where: { id: request.id }, data: { status: "REGISTERED", source: "REAL", txHash, blockchainTrackId: receipt.blockchainTrackId, confirmedAt, errorCode:null,errorMessage:null } });
+      return tx.track.update({ where: { id }, data: { registeredAt: confirmedAt, registrationStatus: "REGISTERED", registrationTxHash: txHash, blockchainTrackId: receipt.blockchainTrackId } });
     });
   }
   async cancel(id: number, userId: number) {

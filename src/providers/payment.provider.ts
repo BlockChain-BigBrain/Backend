@@ -8,7 +8,8 @@ export interface PaymentReceipt {
   source: "REAL" | "MOCK"; buyerId: number; trackId: number; licenseType: LicenseType;
   amount: string; currency: Currency; paymentReference: string;
   paymentConfirmed: boolean; mintConfirmed: boolean; failed?: boolean;
-  txHash?: string; tokenId?: string;
+  txHash?: string; tokenId?: string; chainId?: string; blockNumber?: bigint;
+  allocations?: Array<{ userId: number; percentage: string; amount: string; currency: Currency }>;
 }
 export interface PaymentProvider {
   readonly source: "REAL" | "MOCK" | "UNCONFIGURED";

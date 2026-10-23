@@ -59,4 +59,4 @@ Mock 결제/발급 완료는 SIMULATED이며 License는 PENDING_MINT/MOCK이다.
 
 수정: schema.prisma, app/config, 기존 Track service, 공통 errors 및 Swagger, package.json/package-lock.json, .env.example, README/DATABASE 문서. 이전 기능 브랜치를 뒤늦게 병합하면 schema/migrations, Track 계층, app/config, Swagger와 package lock에서 충돌할 수 있다. 현재 main을 기준으로 후속 외부 Adapter를 작성한다.
 
-실행/검증은 [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md), 외부 연결 계약은 [BLOCKCHAIN_INTEGRATION.md](BLOCKCHAIN_INTEGRATION.md)를 참조한다. 실제 FastAPI/IPFS/chain/ERC-1155/RevenueSplitter 및 프론트 지갑 UI 연결은 아직 미완료다.
+실행/검증은 [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md), 외부 연결 계약은 [BLOCKCHAIN_INTEGRATION.md](BLOCKCHAIN_INTEGRATION.md)를 참조한다. 실제 FastAPI/IPFS와 프론트 지갑 UI는 미완료다. Hardhat chain/ERC1155/RevenueSplitter 실제 연동은 [BLOCKCHAIN_LOCAL_SETUP.md](BLOCKCHAIN_LOCAL_SETUP.md)에 추가했다.

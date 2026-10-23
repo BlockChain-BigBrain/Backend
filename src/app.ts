@@ -20,7 +20,10 @@ import { RightsController } from "./controllers/rights.controller";
 import { createRightsServices } from "./services/rights.services";
 import { createRightsRoutes } from "./routes/rights.routes";
 
+import { chainClient } from "./blockchain/client";
+import { chainRoutes } from "./blockchain/routes";
 const app = express();
+export const blockchainIntegration = chainRoutes(prisma, chainClient);
 const authController = new AuthController(new AuthService(new UserRepository(prisma)));
 const trackController = new TrackController(new TrackService(new TrackRepository(prisma), prisma));
 
@@ -34,6 +37,7 @@ app.get("/google08be8fbfab8fe440.html", (_req, res) => {
 // Keep the old OAuth redirect URI working while provider settings are updated.
 app.get("/api/auth/callback/google", (req, res) => res.redirect(307, `/api/v1/auth/callback/google${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`));
 app.use("/api/v1/auth", createAuthRoutes(authController));
+app.use("/api", blockchainIntegration.router);
 app.use("/api", createRightsRoutes(new RightsController(createRightsServices(prisma))));
 app.use("/api/tracks", createTrackRoutes(trackController));
 app.get("/api/me", requireAuth, (req, res) => res.json({ userId: (req as Request & { userId?: number }).userId }));

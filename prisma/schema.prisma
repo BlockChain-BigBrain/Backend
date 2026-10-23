@@ -154,6 +154,7 @@ model Track {
   audioCid                  String?               @db.VarChar(255)
   registrationStatus        RegistrationStatus    @default(NOT_REGISTERED)
   blockchainTrackId         String?               @db.VarChar(78)
+  registeredAt              DateTime?
   registrationTxHash        String?               @db.VarChar(66)
   contributionsFinalizedAt  DateTime?
   marketplaceListings       MarketplaceListing[]
@@ -259,6 +260,8 @@ model Transaction {
   source             ProofSource         @default(UNCONFIGURED)
   purchaseRequestId  Int?                @unique
   purchaseRequest    PurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  chainId            String?             @db.VarChar(78)
+  blockNumber        BigInt?             @db.UnsignedBigInt
   transactionType    TransactionType     @default(LICENSE_PURCHASE)
   paymentReference   String?             @unique
   failureReason      String?             @db.Text
@@ -318,6 +321,7 @@ model RevenueAllocation {
 }
 
 model RevenueWithdrawal {
+  walletAddress    String?          @db.VarChar(42)
   id               Int              @id @default(autoincrement())
   userId           Int
   amount           Decimal          @db.Decimal(36, 18)
@@ -386,6 +390,7 @@ model PurchaseRequest {
   buyerId              Int
   listingId            Int
   licenseId            Int?               @unique
+  buyerWalletAddress   String?             @db.VarChar(42)
   licenseType          LicenseType
   price                Decimal            @db.Decimal(36, 18)
   currency             Currency
@@ -418,4 +423,26 @@ model WalletChallenge {
   expiresAt     DateTime
   consumedAt    DateTime?
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BlockchainEvent {
+  id              Int       @id @default(autoincrement())
+  chainId         String    @db.VarChar(78)
+  transactionHash String    @db.VarChar(66)
+  logIndex        Int
+  contractAddress String    @db.VarChar(42)
+  eventName       String    @db.VarChar(64)
+  blockNumber     BigInt    @db.UnsignedBigInt
+  blockHash       String    @db.VarChar(66)
+  payload         Json
+  processedAt     DateTime?
+  error           String?   @db.Text
+  attempts        Int       @default(0)
+  @@unique([chainId, transactionHash, logIndex])
+  @@index([chainId, processedAt, blockNumber])
+}
+model BlockchainCursor {
+  chainId     String @id @db.VarChar(78)
+  blockNumber BigInt @db.UnsignedBigInt
+  blockHash   String @db.VarChar(66)
 }

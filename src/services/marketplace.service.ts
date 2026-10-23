@@ -1,3 +1,5 @@
+import { chainClient } from "../blockchain/client";
+import { formatEther, parseEther } from "ethers";
 import { Prisma } from "@prisma/client";
 import { body, currency, licenseType, money, pagination, riskStatus } from "../dto/rights.dto";
 import { own, RightsRepository, RightsTrack, rightsTrackInclude } from "../repositories/rights.repository";
@@ -24,6 +26,25 @@ export function marketView(listing: { id: number; trackId: number; sellerId: num
 }
 export class MarketplaceService {
   constructor(private readonly repo: RightsRepository) {}
+  async chainView(listing: any, track: RightsTrack) {
+    const view=marketView(listing,track);
+    if(!chainClient.configured) return view;
+    await chainClient.ready();
+    if(track.registrationStatus!=="REGISTERED" || !track.blockchainTrackId) return {...view,purchasable:false,onChain:null};
+    if(track.registrationRequests[0]?.contractAddress?.toLowerCase()!==chainClient.addresses.TrackRegistry.toLowerCase() || track.registrationRequests[0]?.chainId!==chainClient.chainId) throw new AppError(409,"Listing belongs to a different deployment");
+    const onTrack=await chainClient.contracts.TrackRegistry.getTrack(track.blockchainTrackId);
+    if(onTrack.audioHash!==`0x${track.audioHash}` || onTrack.metadataCID!==track.metadataCid || onTrack.registrant.toLowerCase()!==track.owner.walletAddress?.toLowerCase()) throw new AppError(409,"Registered chain track differs from backend");
+    const price:bigint=await chainClient.contracts.LicenseMarketplace.getLicensePrice(track.blockchainTrackId);
+    const licensable=await chainClient.contracts.TrackRegistry.isTrackLicensable(track.blockchainTrackId);
+    return {...view,purchasable:view.purchasable && licensable && price>0n && listing.currency==="ETH" && listing.licenseType==="COMMERCIAL" && parseEther(listing.price.toFixed(18))===price,onChain:{chainId:chainClient.chainId,blockchainTrackId:track.blockchainTrackId,priceWei:price.toString(),price:formatEther(price),currency:"ETH",licensable}};
+  }
+  async activeChain(track:RightsTrack, price:Prisma.Decimal, unit:string, type:string) {
+    if(!chainClient.configured) return;
+    await chainClient.ready();
+    if(unit!=="ETH" || type!=="COMMERCIAL" || !track.blockchainTrackId || track.registrationRequests[0]?.contractAddress?.toLowerCase()!==chainClient.addresses.TrackRegistry.toLowerCase()) throw new AppError(409,"Use the local ETH COMMERCIAL registered deployment");
+    const confirmedBlock=await chainClient.provider.getBlockNumber()-chainClient.confirmations+1;
+    if(confirmedBlock<0 || await chainClient.contracts.LicenseMarketplace.getLicensePrice(track.blockchainTrackId,{blockTag:confirmedBlock})!==parseEther(price.toFixed(18))) throw new AppError(409,"Set price on chain and confirm before activating/changing the listing");
+  }
   async create(userId: number, value: unknown) {
     const input = body(value, ["trackId", "price", "currency", "status", "licenseType"]);
     const id = trackId(input.trackId), unit = currency(input.currency), price = money(input.price, unit);
@@ -32,9 +53,10 @@ export class MarketplaceService {
     const type = licenseType(input.licenseType ?? "COMMERCIAL");
     return this.repo.locked(id, async (tx, track) => {
       own(track, userId); eligibleTrack(track, status === "ACTIVE");
+      if(status === "ACTIVE") await this.activeChain(track,price,unit,type);
       if (await tx.marketplaceListing.findFirst({ where: { trackId: id, status: { in: ["PREPARING", "ACTIVE"] } } })) throw new AppError(409, "Track already has a sale or preparation listing");
       const listing = await tx.marketplaceListing.create({ data: { trackId: id, sellerId: userId, price, currency: unit, status, licenseType: type, activeTrackId: status === "ACTIVE" ? id : null } });
-      return marketView(listing, track);
+      return this.chainView(listing, track);
     });
   }
   async get(id: number, userId?: number) {
@@ -42,7 +64,7 @@ export class MarketplaceService {
     if (!listing || (listing.status !== "ACTIVE" && listing.sellerId !== userId)) throw new AppError(404, "Listing not found");
     const track = await this.repo.track(listing.trackId, listing.sellerId);
     if (listing.status === "ACTIVE") eligibleTrack(track, true);
-    return marketView(listing, track);
+    return this.chainView(listing, track);
   }
   async update(id: number, userId: number, value: unknown) {
     const input = body(value, ["price", "currency", "status", "licenseType"]);
@@ -60,8 +82,9 @@ export class MarketplaceService {
         eligibleTrack(track, status === "ACTIVE");
         if (await tx.marketplaceListing.findFirst({ where: { trackId: track.id, id: { not: id }, status: { in: ["PREPARING", "ACTIVE"] } } })) throw new AppError(409, "Another listing exists");
       }
+      if(status === "ACTIVE") await this.activeChain(track,price,unit,input.licenseType===undefined?listing.licenseType:licenseType(input.licenseType));
       const updated = await tx.marketplaceListing.update({ where: { id }, data: { price, currency: unit, status: status as "PREPARING" | "ACTIVE" | "INACTIVE", activeTrackId: status === "ACTIVE" ? track.id : null, licenseType: input.licenseType === undefined ? listing.licenseType : licenseType(input.licenseType) } });
-      return marketView(updated, track);
+      return this.chainView(updated, track);
     });
   }
   async list(value: unknown, userId?: number) {
@@ -95,7 +118,7 @@ export class MarketplaceService {
         const listing = await tx.marketplaceListing.findUniqueOrThrow({ where: { id } });
         const track = await tx.track.findUniqueOrThrow({ where: { id: listing.trackId }, include: rightsTrackInclude });
         if (scope === "public") { try { eligibleTrack(track, true); } catch { continue; } }
-        items.push(marketView(listing, track));
+        items.push(await this.chainView(listing, track));
       }
       return { items, total: Number(count[0].total) };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

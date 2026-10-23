@@ -1,4 +1,14 @@
 import "dotenv/config";
+import { parse } from "dotenv";
+import { readFileSync } from "node:fs";
+// Optional local blockchain overlay only; it cannot replace DB/auth secrets.
+if(process.env.BLOCKCHAIN_ENV_FILE) {
+  const overlay=parse(readFileSync(process.env.BLOCKCHAIN_ENV_FILE));
+  for(const [key,value] of Object.entries(overlay)) {
+    if(!/^(BLOCKCHAIN_|EIP712_|VERIFICATION_SIGNER_|TRACK_REGISTRY_ADDRESS$|LICENSE_NFT_ADDRESS$|LICENSE_MARKETPLACE_ADDRESS$|REVENUE_SPLITTER_ADDRESS$|REGISTRATION_TTL_SECONDS$)/.test(key)) throw new Error("Non-blockchain setting in BLOCKCHAIN_ENV_FILE");
+    process.env[key]=value;
+  }
+}
 import path from "node:path";
 
 function duration(value: string): number {

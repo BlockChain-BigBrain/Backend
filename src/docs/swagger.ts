@@ -1,3 +1,4 @@
+import { blockchainPaths, blockchainSchemas } from "./blockchain.swagger";
 import { trackPaths, trackSchemas } from "./track.swagger";
 import { rightsPaths, rightsSchemas } from "./rights.swagger";
 
@@ -58,6 +59,7 @@ export const swaggerSpec = {
       },
       ...trackSchemas,
       ...rightsSchemas,
+      ...blockchainSchemas,
     },
   },
   paths: {
@@ -147,6 +149,6 @@ export const swaggerSpec = {
       },
     },
     ...trackPaths,
-    ...rightsPaths,
+    ...Object.fromEntries([...new Set([...Object.keys(rightsPaths),...Object.keys(blockchainPaths)])].map(path=>[path,{...rightsPaths[path],...blockchainPaths[path]}])),
   },
 } as const;

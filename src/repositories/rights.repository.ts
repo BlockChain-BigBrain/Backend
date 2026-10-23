@@ -7,7 +7,7 @@ export const rightsTrackInclude = {
   contributions: { include: { user: { select: user } }, orderBy: [{ userId: "asc" }, { role: "asc" }] },
   verifications: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { similarityResults: { orderBy: { score: "desc" }, take: 3 } } },
   metadataSnapshots: { orderBy: { version: "desc" }, take: 1 },
-  registrationRequests: { orderBy: { id: "desc" }, take: 1 },
+  registrationRequests: { orderBy: [{ confirmedAt: "desc" }, { id: "desc" }], take: 1 },
 } satisfies Prisma.TrackInclude;
 export type RightsTrack = Prisma.TrackGetPayload<{ include: typeof rightsTrackInclude }>;
 export function own(track: RightsTrack, userId: number) {

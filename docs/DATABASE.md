@@ -83,3 +83,7 @@ SCHEMA_TEST_MYSQL_SOCKET=/path/to/disposable-mysql.sock npm test
 PurchaseRequest의 신규 상태는 PENDING_PAYMENT/PENDING_MINT/COMPLETED/SIMULATED/FAILED/CANCELLED다. PREPARATION은 별도 boolean이며 실제 구매로 승격하지 않는다. 활성 구매 키는 buyer:track:licenseType:preparation/live이며 FAILED/CANCELLED/SIMULATED에서는 해제한다. 역할별 기여는 구매 시 사용자별 지분 스냅샷으로 고정한다.
 
 현재 데이터 모델·API·변경 파일과 테스트 범위는 [RIGHTS_WORKFLOWS.md](RIGHTS_WORKFLOWS.md), 로컬 실행은 [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md), 최종 컨트랙트 검증 조건은 [BLOCKCHAIN_INTEGRATION.md](BLOCKCHAIN_INTEGRATION.md)에 정리했다. 외부 연동은 기본적으로 미설정이며 실제 CID/영수증/온체인 발급을 임의로 채우지 않는다.
+
+## Hardhat 실제 연동 후속 migration
+
+`20261009120000_add_blockchain_sync`는 registeredAt, transaction chainId/blockNumber, 구매/출금 준비 당시의 지갑 주소를 추가한다. BlockchainEvent는 chainId/txHash/logIndex unique와 block hash/처리 상태/재시도를 저장하며 BlockchainCursor는 확정 블록 위치를 저장한다. 기존 migration은 수정하지 않았고 legacy 기록 보존 테스트가 통과했다. 실제 .env DB에는 자동 적용하지 않았다. [실행/복구 가이드](BLOCKCHAIN_LOCAL_SETUP.md)를 참조한다.
