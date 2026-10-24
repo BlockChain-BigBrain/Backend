@@ -1,0 +1,85 @@
+{
+  "audioHash": "fe53922fcaf745e822edb34bdd38ce6a45a63edbde03baed4725664be15a5892",
+  "modelVersion": "laion/clap-htsat-unfused",
+  "scoreVersion": "clap-top20+tonal-local-v1+expanded-square-v1+secondary-clap-cqt-fragments-v1",
+  "corpusVersion": "4f3f9a269ebb15614713dc54c121f904a86ca60f0acb6f63ece6dc7b243aea12",
+  "thresholds": {
+    "warn": 0.34748932160579077,
+    "hold": 0.8337449399145463
+  },
+  "provisional": true,
+  "decisionPolicyVersion": "layer2-risk-67ce43c6a616",
+  "evaluationScope": "ai_labeled",
+  "referenceTracks": 34,
+  "pureAiCreationVerified": false,
+  "durationSeconds": 120.2,
+  "decision": "WARN",
+  "duplicate": {
+    "detected": false,
+    "matchedTrackId": null
+  },
+  "decisionReason": "TONAL_SEQUENCE_WARNING",
+  "disposition": "HUMAN_REVIEW",
+  "reviewRequired": true,
+  "similarityScore": 0.4504272573653358,
+  "similarTracks": [
+    {
+      "trackId": "alex-morgan-arabic-islam-islamic-music-545530",
+      "score": 0.4504272573653358,
+      "retrievalScore": 0.9038267135620117,
+      "matchedSegments": [
+        {
+          "queryStartSec": 91.95102040816327,
+          "queryEndSec": 102.16780045351474,
+          "refStartSec": 68.26666666666667,
+          "refEndSec": 78.94784580498866,
+          "score": 0.9067457613789223
+        },
+        {
+          "queryStartSec": 30.650340136054425,
+          "queryEndSec": 40.867120181405895,
+          "refStartSec": 96.59501133786848,
+          "refEndSec": 107.27619047619048,
+          "score": 0.8670323560495903
+        },
+        {
+          "queryStartSec": 0.0,
+          "queryEndSec": 10.216780045351474,
+          "refStartSec": 81.26984126984128,
+          "refEndSec": 91.48662131519275,
+          "score": 0.7836293028244241
+        }
+      ]
+    },
+    {
+      "trackId": "boopul-indian-bansuri-flute-tarana-raga-music-525950",
+      "score": 0.07717777799561433,
+      "retrievalScore": 0.7403106689453125,
+      "matchedSegments": [
+        {
+          "queryStartSec": 22.291156462585036,
+          "queryEndSec": 62.22947845804989,
+          "refStartSec": 156.03809523809525,
+          "refEndSec": 190.86802721088435,
+          "score": 0.07717777799561433
+        }
+      ]
+    },
+    {
+      "trackId": "velariomusic-lounge-chill-602635 (1)",
+      "score": 0.037294502717957013,
+      "retrievalScore": 0.7540557980537415,
+      "matchedSegments": [
+        {
+          "queryStartSec": 90.09342403628118,
+          "queryEndSec": 110.06258503401361,
+          "refStartSec": 136.53333333333333,
+          "refEndSec": 154.18049886621316,
+          "score": 0.037294502717957013
+        }
+      ]
+    }
+  ],
+  "queryWindowCount": 24,
+  "processingSeconds": 12.775
+}

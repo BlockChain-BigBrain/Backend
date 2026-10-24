@@ -1,5 +1,7 @@
 # Music Rights Backend
 
+AI HTTP 공급자는 실제 FastAPI 결과의 검색 범위·원곡 후보·세부 대응 구간을 원본 `evidence`로 보존합니다. 구간의 좌표·점수·길이 상한과 AI 표시군 메타데이터를 검증하며, 잘못된 근거는 저장 전에 거절합니다. `tests/ai-evidence.test.cjs`는 계정 정보가 없는 실제 로컬 정밀 WARN 메타데이터로 회귀 검증합니다. 음원·내부 인증 키는 포함하지 않습니다.
+
 Node.js, TypeScript, Express, Prisma, MySQL 기반의 음원 권리 등록 데모 백엔드입니다. 음원은 S3 대신 프로젝트 루트의 `uploads/`에 저장합니다.
 
 ## 실행

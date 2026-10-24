@@ -119,11 +119,14 @@ test('deletion removes local files, restores on DB failure and tolerates missing
 test('local file access prevents traversal and symlink reads/deletes', async t => {
   const {dir,files,repo,service}=await fixture(t);
   for(const value of ['/etc/passwd','/uploads/../secret','/uploads/..','/uploads/a/b','/uploads/a\\b','/uploads/.delete-test','/uploads/']) assert.throws(()=>files.resolve(value),{statusCode:400});
-  const target=path.join(root,'private-data'); await fs.writeFile(target,'secret');
-  await fs.symlink(target,path.join(dir,'linked.wav'));
-  repo.records.set(1,record(1,{audioPath:'/uploads/linked.wav'}));
-  await assert.rejects(service.audio(1),{statusCode:400}); await assert.rejects(service.remove(1,1),{statusCode:400});
-  assert.equal(await fs.readFile(target,'utf8'),'secret'); assert.equal(repo.records.size,1);
+  await t.test('symbolic link reads/deletes are denied when the platform permits link creation',async sub=>{
+    const target=path.join(root,'private-data'); await fs.writeFile(target,'secret');
+    try { await fs.symlink(target,path.join(dir,'linked.wav')); }
+    catch(error) { if(process.platform==='win32' && error.code==='EPERM') {sub.skip('Windows symlink creation requires Developer Mode or the link privilege');return;} throw error; }
+    repo.records.set(1,record(1,{audioPath:'/uploads/linked.wav'}));
+    await assert.rejects(service.audio(1),{statusCode:400}); await assert.rejects(service.remove(1,1),{statusCode:400});
+    assert.equal(await fs.readFile(target,'utf8'),'secret'); assert.equal(repo.records.size,1);
+  });
 });
 
 async function serve(t, app) {

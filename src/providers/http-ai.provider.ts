@@ -68,8 +68,21 @@ export function normalizeAiEvidence(raw: any, audioHash: string): AiVerification
   const score = blocked ? 1 : bounded(raw.similarityScore);
   const similarTracks = raw.similarTracks.map((item: any) => {
     if (typeof item.trackId !== "string" || !item.trackId || item.trackId.length > 191 || typeof item.score !== "number" || !Number.isFinite(item.score) || item.score < -1 || item.score > 1 || !Array.isArray(item.matchedSegments)) throw new AppError(502, "Invalid external corpus match");
+    if (item.matchedSegments.length > 12) throw new AppError(502, "Too many AI matching segments");
+    for (const segment of item.matchedSegments) {
+      if (!segment || ![segment.queryStartSec, segment.queryEndSec, segment.refStartSec, segment.refEndSec, segment.score].every(Number.isFinite)
+        || segment.queryStartSec < 0 || segment.refStartSec < 0 || segment.queryEndSec < segment.queryStartSec || segment.refEndSec < segment.refStartSec
+        || segment.score < -1 || segment.score > 1
+        || ((segment.queryEndSec === segment.queryStartSec || segment.refEndSec === segment.refStartSec) && segment.score !== 0)
+        || (Number.isFinite(raw.durationSeconds) && segment.queryEndSec > raw.durationSeconds + .001)) throw new AppError(502, "Invalid AI matching segment");
+    }
     return { externalTrackId: item.trackId, score: bounded(item.score) };
   });
+  if (raw.evaluationScope !== undefined && !["all", "ai_labeled"].includes(raw.evaluationScope)) throw new AppError(502, "Invalid AI evaluation scope");
+  if (raw.evaluationScope === "ai_labeled" && raw.referenceTracks === undefined) throw new AppError(502, "Missing AI reference count");
+  if (raw.referenceTracks !== undefined && (!Number.isSafeInteger(raw.referenceTracks) || raw.referenceTracks < 1)) throw new AppError(502, "Invalid AI reference count");
+  if (raw.durationSeconds !== undefined && (!Number.isFinite(raw.durationSeconds) || raw.durationSeconds <= 0 || raw.durationSeconds > 1800)) throw new AppError(502, "Invalid AI duration");
+  if (raw.pureAiCreationVerified !== undefined && typeof raw.pureAiCreationVerified !== "boolean") throw new AppError(502, "Invalid AI creation provenance");
   return validateAiResult({ duplicate: blocked, riskScore: score, status: riskStatus(score), modelVersion: raw.modelVersion, similarTracks, evidence: raw });
 }
 
