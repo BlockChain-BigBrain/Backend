@@ -82,6 +82,12 @@ export class AuthController {
   private setRefresh(res: Response, token: string, frontend = false) { res.cookie(frontend ? "frontendRefreshToken" : "refreshToken", token, { ...refreshOptions, maxAge: refreshMaxAge }); }
   private checkOrigin(req: Request) {
     const origins = [new URL(config.frontendUrl).origin, new URL(config.googleCallbackUrl).origin];
+    // Local Swagger runs on the API port even when OAuth points to a deployed backend.
+    if (process.env.NODE_ENV !== "production") {
+      for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+        origins.push(new URL(`http://${host}:${config.port}`).origin);
+      }
+    }
     if ((req.headers.origin ? !origins.includes(req.headers.origin) : req.headers["sec-fetch-site"] === "cross-site")) {
       throw new AppError(403, "Untrusted request origin");
     }

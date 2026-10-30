@@ -4,6 +4,7 @@
 - Render: `FRONTEND_URL=https://blockchain-bigbrain.github.io`, `COOKIE_SECURE=true`.
 - `GOOGLE_CALLBACK_URL`은 Google Cloud에 등록된 HTTPS 콜백과 일치해야 합니다. 기존 `/api/auth/callback/google`도 지원합니다.
 - CORS는 FRONTEND_URL의 origin만 사용합니다. 허용된 Origin의 교차 사이트 인증 요청은 허용하고 다른 Origin은 거부합니다.
+- 로컬 Swagger 인증 요청은 `NODE_ENV`가 production이 아닐 때 `http://localhost:PORT`, `http://127.0.0.1:PORT`, `http://[::1]:PORT`도 허용합니다. 따라서 배포용 OAuth 콜백을 유지한 채 로컬 Swagger에서 비밀번호 로그인할 수 있습니다. 배포 서버는 `NODE_ENV=production`으로 실행하세요.
 - HTTPS refresh 쿠키는 HttpOnly / Secure / SameSite=None입니다. 타사 쿠키를 차단하는 브라우저에서는 세션 복원이 제한될 수 있습니다.
 - 프론트는 Vite BASE_URL(`/Frontend/`)을 OAuth redirectTo에 전달하므로 GitHub Pages에 존재하지 않는 `/auth/callback` 페이지가 필요하지 않습니다.
 - 업로드는 공유 인증 클라이언트로 POST /api/tracks에 Bearer 토큰, audio 파일, 파일명에서 만든 title, prompt, workLog를 전송합니다. 프로젝트 파일 첨부는 서버에서 지원하지 않아 명시적으로 안내합니다.

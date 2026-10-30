@@ -268,3 +268,27 @@ test('logout clears the cookie with matching options even when database revocati
   assert.deepEqual(res.cleared,['frontendRefreshToken']);
   assert.deepEqual(res.clearOptions,{httpOnly:true,secure:true,sameSite:'none',path:'/api/v1/auth'});
 });
+
+test('local Swagger login works with deployed frontend and callback, but production rejects local origins', async () => {
+  const {config} = require('../dist/config');
+  const previous = {frontendUrl:config.frontendUrl, googleCallbackUrl:config.googleCallbackUrl, nodeEnv:process.env.NODE_ENV};
+  const controller = new AuthController({logIn:async()=>({accessToken:'access',refreshToken:'refresh'})});
+  const login = origin => controller.logIn({headers:{origin},body:{email:'fan@example.com',password:'password123'}},response());
+  try {
+    config.frontendUrl = 'https://frontend.example/Frontend/';
+    config.googleCallbackUrl = 'https://backend.example/api/auth/callback/google';
+    process.env.NODE_ENV = 'development';
+    for (const host of ['localhost','127.0.0.1','[::1]']) await login(new URL(`http://${host}:${config.port}`).origin);
+    await assert.rejects(login(`http://localhost:${config.port + 1}`),{statusCode:403});
+    await assert.rejects(login(`http://localhost.evil.test:${config.port}`),{statusCode:403});
+    process.env.NODE_ENV = 'production';
+    await assert.rejects(login(new URL(`http://localhost:${config.port}`).origin),{statusCode:403});
+    await login('https://frontend.example');
+    await login('https://backend.example');
+  } finally {
+    config.frontendUrl = previous.frontendUrl;
+    config.googleCallbackUrl = previous.googleCallbackUrl;
+    if (previous.nodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous.nodeEnv;
+  }
+});
