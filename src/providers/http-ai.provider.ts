@@ -1,3 +1,5 @@
+import { detectAudio } from "../utils/audioFile";
+import { isEbml } from "../utils/webmAudio";
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { Prisma } from "@prisma/client";
@@ -32,7 +34,9 @@ export class HttpAiVerificationProvider implements AiVerificationProvider {
       try { return JSON.parse(raw); } catch { throw new AppError(502, "Invalid AI response"); }
     };
     const form = new FormData();
-    form.set("file", new Blob([new Uint8Array(bytes)]), input.audioPath.split("/").pop()!);
+    const mime = isEbml(bytes) ? "audio/webm" : detectAudio(bytes);
+    const suffix = mime === "audio/webm" ? "webm" : mime === "audio/mpeg" ? "mp3" : "wav";
+    form.set("file", new Blob([new Uint8Array(bytes)], { type: mime }), `track-${input.trackId}.${suffix}`);
     form.set("trackId", String(input.trackId)); form.set("requestId", input.requestId ?? `track-${input.trackId}-${input.audioHash}`);
     const accepted = await request("/verify", { method: "POST", body: form });
     if (typeof accepted.jobId !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(accepted.jobId)) throw new AppError(502, "Invalid AI job identifier");

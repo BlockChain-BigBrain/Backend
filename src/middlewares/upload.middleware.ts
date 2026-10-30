@@ -17,7 +17,7 @@ export const audioUpload = multer({
   }),
   limits: { fileSize: config.maxUploadBytes, files: 1, fields: 5, fieldSize: 65535, parts: 6 },
   fileFilter: (_req, file, callback) => {
-    if (!["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream"].includes(file.mimetype)) return callback(new AppError(415, "Only MP3 and WAV uploads are supported"));
+    if (!["audio/webm", "video/webm", "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream"].includes(file.mimetype)) return callback(new AppError(415, "Only MP3, WAV and WebM uploads are supported"));
     callback(null, true);
   },
 });

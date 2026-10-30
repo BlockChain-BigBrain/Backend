@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { config } from "../config";
 import { AppError } from "./errors";
+import { isEbml, inspectWebm } from "./webmAudio";
 import { detectAudio } from "./audioFile";
 import { logServerError } from "./errorLogger";
 
@@ -42,7 +43,7 @@ export class TrackFiles {
       if (opened.size <= 0) throw new AppError(415, "Audio file is empty");
       if (opened.size > this.maxBytes) throw new AppError(413, "Audio file is too large");
       const buffer = await opened.handle.readFile();
-      const mimeType = detectAudio(buffer);
+      const mimeType = isEbml(buffer) ? await inspectWebm(buffer) : detectAudio(buffer);
       return { audioPath, mimeType, audioHash: createHash("sha256").update(buffer).digest("hex"), fileSize: BigInt(buffer.length) };
     } finally { await opened.handle.close(); }
   }

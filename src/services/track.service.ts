@@ -92,8 +92,8 @@ export class TrackService {
   async audio(id: number, userId?: number) {
     const track = await this.readable(id, userId);
     const opened = await this.files.open(track.audioPath);
-    const mimeType = ["audio/mpeg", "audio/mp3"].includes(track.mimeType) ? "audio/mpeg" : ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"].includes(track.mimeType) ? "audio/wav" : undefined;
-    if (!mimeType) { await opened.handle.close(); throw new AppError(415, "Only MP3 and WAV playback is supported"); }
+    const mimeType = ["audio/mpeg", "audio/mp3"].includes(track.mimeType) ? "audio/mpeg" : ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"].includes(track.mimeType) ? "audio/wav" : ["audio/webm", "video/webm"].includes(track.mimeType) ? track.mimeType : undefined;
+    if (!mimeType) { await opened.handle.close(); throw new AppError(415, "Only MP3, WAV and WebM playback is supported"); }
     return { ...opened, mimeType, id: track.id };
   }
   // Existing request-only functionality is retained; AI integration belongs to the next feature.
