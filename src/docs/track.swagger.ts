@@ -16,7 +16,7 @@ export const trackSchemas = {
     type: "object", properties: {
       id: { type: "integer" }, ...editable,
       audioPath: { type: "string", example: "/api/tracks/1/audio", description: "권한 확인을 거치는 재생 API. 로컬 파일 경로는 노출하지 않음." },
-      mimeType: { type: "string", enum: ["audio/mpeg", "audio/wav"] }, ownerId: { type: "integer" },
+      mimeType: { type: "string", enum: ["audio/mpeg", "audio/wav", "audio/webm", "video/webm"] }, ownerId: { type: "integer" },
       audioHash: { type: "string", nullable: true, minLength: 64, maxLength: 64, description: "SHA-256 hex. 기존 파일은 미계산 시 null." },
       fileSize: { type: "string", nullable: true, pattern: "^[0-9]+$", description: "바이트 수. BigInt를 문자열로 직렬화." },
       duration: { type: "string", nullable: true, description: "초. 이번 단계에서는 계산하지 않음." },
@@ -51,8 +51,8 @@ export const trackPaths = {
       },
     },
     post: {
-      tags: ["Tracks"], summary: "MP3/WAV 업로드", security,
-      description: "PCM/IEEE float WAV 또는 MPEG Layer III MP3(최소 2개 프레임). 파일 내용 검증, SHA-256 저장. 기본 제한 50MiB(MAX_UPLOAD_MB). 원본 파일명 무시. isPublic 기본 true로 기존 공개 동작 유지.",
+      tags: ["Tracks"], summary: "MP3/WAV/WebM 업로드", security,
+      description: "ffprobe로 오디오 트랙을 확인한 WebM(Opus/Vorbis), PCM/IEEE float WAV 또는 MPEG Layer III MP3(최소 2개 프레임). 파일 내용 검증, SHA-256 저장. 기본 제한 50MiB(MAX_UPLOAD_MB). 원본 파일명 무시. isPublic 기본 true로 기존 공개 동작 유지.",
       requestBody: { required: true, content: { "multipart/form-data": { schema: {
         type: "object", additionalProperties: false, required: ["audio", "title"], properties: {
           audio: { type: "string", format: "binary" }, ...editable,
@@ -77,7 +77,7 @@ export const trackPaths = {
       description: "공개 음원은 공개 재생, 비공개는 소유자만 접근. 단일 bytes Range 지원. HEAD 가능. /uploads 직접 접근은 지원하지 않음.",
       parameters: [id, { name: "download", in: "query", schema: { type: "boolean", default: false } }, { name: "Range", in: "header", schema: { type: "string", example: "bytes=0-1023" } }],
       responses: {
-        "200": { description: "전체 파일", content: { "audio/mpeg": { schema: { type: "string", format: "binary" } }, "audio/wav": { schema: { type: "string", format: "binary" } } } },
+        "200": { description: "전체 파일", content: { "audio/mpeg": { schema: { type: "string", format: "binary" } }, "audio/wav": { schema: { type: "string", format: "binary" } }, "audio/webm": { schema: { type: "string", format: "binary" } }, "video/webm": { schema: { type: "string", format: "binary" } } } },
         "206": { description: "부분 파일", headers: { "Content-Range": { schema: { type: "string" } } } },
         "400": failureResponses["400"], "401": failureResponses["401"], "404": failureResponses["404"],
         "415": error("지원하지 않는 기존 음원 형식"),

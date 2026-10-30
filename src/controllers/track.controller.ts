@@ -52,7 +52,7 @@ export class TrackController {
       }
       res.status(206).set("Content-Range", `bytes ${start}-${end}/${audio.size}`);
     }
-    const extension = audio.mimeType === "audio/mpeg" ? "mp3" : "wav";
+    const extension = audio.mimeType === "audio/mpeg" ? "mp3" : audio.mimeType.endsWith("/webm") ? "webm" : "wav";
     res.set({ "Content-Length": String(Math.max(0, end - start + 1)), "Content-Disposition": `${req.query.download === "true" ? "attachment" : "inline"}; filename="track-${audio.id}.${extension}"` });
     if (req.method === "HEAD" || audio.size === 0) { await audio.handle.close(); res.end(); return; }
     const stream = audio.handle.createReadStream({ start, end, autoClose: true });
