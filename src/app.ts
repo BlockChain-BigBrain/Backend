@@ -10,6 +10,7 @@ import { TrackController } from "./controllers/track.controller";
 import { requireAuth } from "./middlewares/auth.middleware";
 import { createAuthRoutes } from "./routes/auth.routes";
 import { createTrackRoutes } from "./routes/track.routes";
+import { createWalletRoutes } from "./routes/wallet.routes";
 import { AuthService } from "./services/auth.service";
 import { TrackService } from "./services/track.service";
 import { UserRepository } from "./repositories/user.repository";
@@ -40,6 +41,7 @@ app.use("/api/v1/auth", createAuthRoutes(authController));
 app.use("/api", blockchainIntegration.router);
 app.use("/api", createRightsRoutes(new RightsController(createRightsServices(prisma))));
 app.use("/api/tracks", createTrackRoutes(trackController));
+app.use("/api/users", createWalletRoutes(prisma));
 app.get("/api/me", requireAuth, (req, res) => res.json({ userId: (req as Request & { userId?: number }).userId }));
 app.use((error: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
   if (res.headersSent) return _next(error);
