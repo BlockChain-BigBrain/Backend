@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { getAddress, verifyMessage } from "ethers";
 import { Router } from "express";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest, requireAuth } from "../middlewares/auth.middleware";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/errors";
@@ -51,7 +51,8 @@ export function createWalletRoutes(db: PrismaClient) {
     const signature = signatureOf(req.body?.signature);
     const userId = req.userId!;
     // Consume and link in one DB transaction to prevent replay and concurrent binding.
-    const result = await db.$transaction(async tx => {
+    let result: { walletAddress: string | null }; 
+    try { result = await db.$transaction(async tx => {
       const challenge = await tx.walletChallenge.findUnique({ where: { userId } });
       if (!challenge || challenge.consumedAt || challenge.expiresAt.getTime() <= Date.now()) {
         throw new AppError(401, "Wallet challenge expired or already used");
@@ -67,7 +68,10 @@ export function createWalletRoutes(db: PrismaClient) {
       if (consumed.count !== 1) throw new AppError(409, "Wallet challenge already used");
       const user = await tx.user.update({ where: { id: userId }, data: { walletAddress: recovered }, select: { id: true, walletAddress: true } });
       return { walletAddress: user.walletAddress };
-    });
+    }); } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") throw new AppError(409, "Wallet already linked to another account");
+      throw error;
+    }
     res.json(result);
   }));
 
