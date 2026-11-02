@@ -52,7 +52,7 @@ export function contribution(value: unknown, partial = false) {
 }
 export function riskStatus(value: unknown): RiskStatus {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new AppError(400, "riskScore must be between 0 and 1");
-  return value < 0.8 ? "PASS" : value < 0.9 ? "WARN" : "HOLD";
+  return value < 0.8 ? "PASS" : value < 0.85 ? "WARN" : "HOLD";
 }
 export function licenseType(value: unknown): LicenseType {
   if (value !== "COMMERCIAL" && value !== "PERSONAL") throw new AppError(400, "Invalid licenseType");

@@ -22,7 +22,7 @@ function fixture() {
   return {track,creator,collaborator,signer,options,request};
 }
 test('risk boundaries, deterministic mock source and malformed AI fixtures',async()=>{
-  for(const [score,status] of [[0,'PASS'],[0.7999,'PASS'],[0.8,'WARN'],[0.8999,'WARN'],[0.9,'HOLD'],[1,'HOLD']]) assert.equal(riskStatus(score),status);
+  for(const [score,status] of [[0,'PASS'],[0.7999,'PASS'],[0.8,'WARN'],[0.8499,'WARN'],[0.85,'HOLD'],[0.8999,'HOLD'],[0.9,'HOLD'],[1,'HOLD']]) assert.equal(riskStatus(score),status);
   for(const score of [-1,1.1,NaN,'0.8']) assert.throws(()=>riskStatus(score),{statusCode:400});
   const provider=new MockAiVerificationProvider();assert.equal(provider.source,'MOCK');
   const result=await provider.verify({});assert.deepEqual(result,await provider.verify({}));assert.doesNotThrow(()=>validateAiResult(result));
@@ -57,7 +57,7 @@ test('metadata excludes private fields by default and requires explicit disclosu
   assert.equal(validCid('bafkreigh2akiscaildc6o6p2nhccz3u5c6afgzkgkbb37faqxnxm6woj5m'),true);
 });
 test('EIP-712 readiness blocks mock/missing CIDs; typed data can be signed and verified',async()=>{
-  const {track,options,request,signer}=fixture();assert.ok(registrationPrerequisites(track,options).includes('realMetadataCid'));assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
+  const {track,options,request,signer}=fixture();assert.ok(registrationPrerequisites(track,options).includes('realMetadataCid'));assert.ok(!registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
   assert.equal(typedRegistration(track,request,options).typedData,null);
   track.verifications[0].source='AI';track.metadataCid='bafkreigh2akiscaildc6o6p2nhccz3u5c6afgzkgkbb37faqxnxm6woj5m';
   const document=metadataDocument(track);
@@ -119,9 +119,9 @@ test('AI timeout aborts the provider and never turns a stalled analysis into a s
   assert.equal(signal.aborted,true);
 });
 
-test('AI review evidence blocks both registration signing and sale even below fixed contract HOLD threshold',()=>{
+test('HOLD evidence permits registration signing but blocks sale',()=>{
   const {track,options}=fixture();
-  track.verifications[0].source='AI';track.verifications[0].riskScore=new Prisma.Decimal('.895');track.verifications[0].riskStatus='WARN';track.verifications[0].evidence={decision:'HOLD',reviewRequired:true};
+  track.verifications[0].source='AI';track.verifications[0].riskScore=new Prisma.Decimal('.895');track.verifications[0].riskStatus='HOLD';track.verifications[0].evidence={decision:'HOLD',reviewRequired:true};
   assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
   assert.throws(()=>eligibleTrack(track,false),{statusCode:409});
 });
