@@ -1,5 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
+export const AI_POLICY = {
+  scoreVersion: 'hybrid_query_top3_pairwise_hold-v5',
+  decisionPolicyVersion: 'track-ai-balanced-policy-v5-20261102',
+  thresholds: { warn: 0.351229127861893, hold: 0.9471999941293027 },
+} as const;
+
 export type AiEvidence = {
   decision: 'PASS' | 'WARN' | 'HOLD' | 'BLOCK';
   audioHash: string;
@@ -27,11 +33,13 @@ export function isAiEvidence(value: unknown): value is AiEvidence {
   return !!r && ['PASS','WARN','HOLD','BLOCK'].includes(r.decision)
     && typeof r.audioHash === 'string' && /^[a-f0-9]{64}$/.test(r.audioHash)
     && typeof r.modelVersion === 'string' && typeof r.corpusVersion === 'string'
-    && typeof r.scoreVersion === 'string' && typeof r.decisionPolicyVersion === 'string'
+    && r.scoreVersion === AI_POLICY.scoreVersion && r.decisionPolicyVersion === AI_POLICY.decisionPolicyVersion
     && Number.isFinite(r.durationSeconds) && r.durationSeconds > 0
-    && !!r.thresholds && Number.isFinite(r.thresholds.warn) && Number.isFinite(r.thresholds.hold) && r.thresholds.warn <= r.thresholds.hold
+    && !!r.thresholds && Math.abs(r.thresholds.warn - AI_POLICY.thresholds.warn) < 1e-12 && Math.abs(r.thresholds.hold - AI_POLICY.thresholds.hold) < 1e-12
     && !!r.duplicate && typeof r.duplicate.detected === 'boolean'
-    && Array.isArray(r.similarTracks) && r.similarTracks.every(t => t && typeof t.trackId === 'string' && Number.isFinite(t.score) && Array.isArray(t.matchedSegments))
+    && typeof r.provisional === 'boolean'
+    && Array.isArray(r.similarTracks) && r.similarTracks.every(t => t && typeof t.trackId === 'string' && Number.isFinite(t.score) && Array.isArray(t.matchedSegments) && t.matchedSegments.every(s => s && [s.queryStartSec,s.queryEndSec,s.refStartSec,s.refEndSec,s.score].every(Number.isFinite)))
+    && (r.decision === 'BLOCK' || (typeof r.queryVerifierScore === 'number' && Number.isFinite(r.queryVerifierScore)))
     && (r.decision === 'BLOCK' ? r.duplicate.detected && typeof r.duplicate.matchedTrackId === 'string'
       : !r.duplicate.detected && typeof r.similarityScore === 'number' && Number.isFinite(r.similarityScore));
 }
