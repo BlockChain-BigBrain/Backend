@@ -3,7 +3,7 @@ import { chainClient } from "../blockchain/client";
 import { randomBytes } from "node:crypto";
 import { AbiCoder, id as utf8Hash, keccak256, TypedDataEncoder, Wallet, verifyTypedData } from "ethers";
 import { Prisma, RegistrationRequest } from "@prisma/client";
-import { riskStatus, wallet } from "../dto/rights.dto";
+import { wallet } from "../dto/rights.dto";
 import { BlockchainProvider } from "../providers/blockchain.provider";
 import { own, RightsRepository, RightsTrack } from "../repositories/rights.repository";
 import { creatorShares } from "./contribution.service";
@@ -70,7 +70,7 @@ export function registrationPrerequisites(track: RightsTrack, options: Blockchai
   const snapshot = track.metadataSnapshots[0];
   if (!validCid(track.metadataCid) || !snapshot || snapshot.status !== "UPLOADED" || snapshot.metadataCid !== track.metadataCid || !snapshotMatchesTrack(track)) missing.push("realMetadataCid");
   const verification = track.verifications[0];
-  if (!verification || verification.status !== "VERIFIED" || verification.source !== "AI" || verification.duplicate !== false || verification.riskScore === null || !verification.modelVersion || !["PASS", "WARN", "HOLD"].includes(verification.riskStatus ?? "") || (verification.evidence && typeof verification.evidence === "object" && !Array.isArray(verification.evidence) && (verification.evidence as Record<string, any>).decision === "BLOCK") || riskStatus(verification.riskScore.toNumber()) !== verification.riskStatus) missing.push("realEligibleAiVerification");
+  if (!verification || verification.status !== "VERIFIED" || verification.source !== "AI" || verification.duplicate !== false || verification.riskScore === null || !verification.modelVersion || !["PASS", "WARN", "HOLD"].includes(verification.riskStatus ?? "") || (verification.evidence && typeof verification.evidence === "object" && !Array.isArray(verification.evidence) && (verification.evidence as Record<string, any>).decision === "BLOCK")) missing.push("realEligibleAiVerification");
   if (snapshot && verification && (snapshot.document as Record<string, any>).verification?.id !== verification.id) missing.push("currentMetadataVerification");
   if (!track.contributionsFinalizedAt) missing.push("finalizedContributions");
   try { wallet(track.owner.walletAddress); creatorShares(track); } catch { missing.push("creatorWallets"); }
