@@ -48,6 +48,14 @@ export class ContributionService {
       }
       const pending = await tx.contributionInvitation.count({ where: { trackId: id, status: "PENDING" } });
       if (pending) throw new AppError(409, "All contributor invitations must be accepted or cancelled before finalization");
+      const accepted = await tx.contributionInvitation.findMany({ where: { trackId: id, status: "ACCEPTED" } });
+      for (const item of track.contributions) {
+        if (item.userId === track.ownerId) continue;
+        const person = await tx.user.findUniqueOrThrow({ where: { id: item.userId }, select: { email: true, walletAddress: true } });
+        const approved = accepted.some(inv => inv.role === item.role && inv.percentage.eq(item.percentage) &&
+          (inv.email === person.email.toLowerCase() || (inv.walletAddress !== null && inv.walletAddress === person.walletAddress?.toLowerCase())));
+        if (!approved) throw new AppError(409, "Contributor approval is required before finalization");
+      }
       const shares = creatorShares(track);
       if (!track.contributionsFinalizedAt) await tx.track.update({ where: { id }, data: { contributionsFinalizedAt: new Date() } });
       return { finalized: true, shares };
