@@ -4,7 +4,7 @@ import { RightsRepository, mutable, own } from "../repositories/rights.repositor
 import { AppError } from "../utils/errors";
 
 type InviteInput = { email?: string; walletAddress?: string; role?: string; percentage?: number };
-const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class InvitationService {
   constructor(private readonly repo: RightsRepository) {}
