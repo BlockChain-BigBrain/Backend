@@ -30,7 +30,7 @@ export class InvitationService {
     const data = raw as InviteInput;
     if ((!!data.email) === (!!data.walletAddress)) throw new AppError(400, "Provide exactly one email or walletAddress");
     if (data.role !== "VOCAL") throw new AppError(400, "Only VOCAL invitations are supported");
-    if (typeof data.percentage !== "number" || !Number.isFinite(data.percentage) || data.percentage <= 0 || data.percentage > 100 || Math.round(data.percentage * 100) !== data.percentage * 100) throw new AppError(400, "Invalid percentage");
+    if (typeof data.percentage !== "number" || !Number.isFinite(data.percentage) || data.percentage <= 0 || data.percentage > 100 || !/^\\d+(\\.\\d{1,2})?$/.test(String(data.percentage))) throw new AppError(400, "Invalid percentage");
     const email = data.email?.trim().toLowerCase();
     if (email && (!emailPattern.test(email) || email.length > 191)) throw new AppError(400, "Invalid email");
     let walletAddress: string | undefined;
