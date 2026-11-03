@@ -17,6 +17,12 @@ export class RightsController {
   readonly wallet = this.handler((s, _req, _id, userId) => s.wallet.current(userId));
   readonly walletChallenge = this.handler((s, req, _id, userId) => s.wallet.challenge(userId, req.body), 201);
   readonly bindWallet = this.handler((s, req, _id, userId) => s.wallet.bind(userId, req.body));
+  readonly invitations = this.handler((s, _req, id, userId) => s.invitations.forTrack(id, userId));
+  readonly invite = this.handler((s, req, id, userId) => s.invitations.create(id, userId, req.body), 201);
+  readonly inbox = this.handler((s, _req, _id, userId) => s.invitations.inbox(userId));
+  readonly acceptInvite = this.handler((s, req, id, userId) => s.invitations.respond(id, userId, "ACCEPTED"));
+  readonly rejectInvite = this.handler((s, req, id, userId) => s.invitations.respond(id, userId, "REJECTED"));
+  readonly cancelInvite = this.handler((s, req, id, userId) => s.invitations.cancel(id, userId));
   readonly contributors = this.handler((s, req, id) => s.contributions.list(id, req.userId));
   readonly addContributor = this.handler((s, req, id, userId) => s.contributions.change(id, userId, "create", req.body), 201);
   readonly updateContributor = this.handler((s, req, id, userId) => s.contributions.change(id, userId, "update", req.body, trackId(req.params.contributionId)));
