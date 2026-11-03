@@ -10,6 +10,7 @@ import { UnconfiguredStorageProvider } from "../providers/storage.provider";
 import { RightsRepository } from "../repositories/rights.repository";
 import { BlockchainService } from "./blockchain.service";
 import { ContributionService } from "./contribution.service";
+import { InvitationService } from "./invitation.service";
 import { LicenseService } from "./license.service";
 import { MarketplaceService } from "./marketplace.service";
 import { MetadataService } from "./metadata.service";
@@ -22,6 +23,7 @@ export function createRightsServices(db: PrismaClient) {
   return {
     wallet: new WalletService(repo),
     contributions: new ContributionService(repo),
+    invitations: new InvitationService(repo),
     verifications: new VerificationService(repo, config.aiProviderMode === "http" ? new HttpAiVerificationProvider() : config.aiProviderMode === "mock" ? new MockAiVerificationProvider() : new UnconfiguredAiVerificationProvider()),
     metadata: new MetadataService(repo, config.storageProviderMode === "kubo" ? new KuboStorageProvider() : new UnconfiguredStorageProvider()),
     blockchain: new BlockchainService(repo, chainClient.configured ? chainClient : new UnconfiguredBlockchainProvider()),
