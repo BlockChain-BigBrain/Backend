@@ -52,29 +52,31 @@ export class HttpAiVerificationProvider implements AiVerificationProvider {
 }
 
 export function normalizeAiEvidence(raw: any, audioHash: string): AiVerificationResponse {
-  if (!raw || raw.audioHash !== audioHash || !["PASS", "WARN", "HOLD", "BLOCK"].includes(raw.decision) || typeof raw.duplicate?.detected !== "boolean" || typeof raw.reviewRequired !== "boolean" || typeof raw.provisional !== "boolean") throw new AppError(502, "Invalid AI evidence or audio hash mismatch");
-  for (const field of ["modelVersion", "scoreVersion", "corpusVersion", "decisionPolicyVersion", "decisionReason", "disposition"]) if (typeof raw[field] !== "string" || !raw[field] || raw[field].length > 191) throw new AppError(502, "Incomplete AI provenance");
+  if (!raw || raw.audioHash !== audioHash || !["PASS", "WARN", "HOLD", "BLOCK"].includes(raw.decision) || typeof raw.duplicate?.detected !== "boolean" || typeof raw.provisional !== "boolean") throw new AppError(502, "Invalid AI evidence or audio hash mismatch");
+  for (const field of ["modelVersion", "scoreVersion", "corpusVersion", "decisionPolicyVersion"]) if (typeof raw[field] !== "string" || !raw[field] || raw[field].length > 191) throw new AppError(502, "Incomplete AI provenance");
   const { warn, hold } = raw.thresholds ?? {};
-  if (!Number.isFinite(warn) || !Number.isFinite(hold) || warn < 0 || warn >= hold || hold > 1 || !Number.isFinite(raw.processingSeconds) || raw.processingSeconds < 0) throw new AppError(502, "Invalid AI policy evidence");
+  // v5 WARN and HOLD thresholds belong to different calibrated classifiers.
+  if (![warn, hold].every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1) || !Number.isFinite(raw.processingSeconds) || raw.processingSeconds < 0) throw new AppError(502, "Invalid AI policy evidence");
   const blocked = raw.decision === "BLOCK";
   if (blocked !== raw.duplicate.detected || (blocked && raw.similarityScore !== null) || !Array.isArray(raw.similarTracks) || raw.similarTracks.length > 3) throw new AppError(502, "Contradictory AI evidence");
-  if (!blocked && (typeof raw.similarityScore !== "number" || raw.similarityScore < -1 || raw.similarityScore > 1)) throw new AppError(502, "Invalid raw similarity score");
   if (!blocked) {
-    const expected = raw.similarityScore >= hold ? "HOLD" : raw.similarityScore >= warn ? "WARN" : "PASS";
-    if (raw.decision !== expected) throw new AppError(502, "AI decision disagrees with its thresholds");
+    if (typeof raw.similarityScore !== "number" || !Number.isFinite(raw.similarityScore) || raw.similarityScore < 0 || raw.similarityScore > 1 || typeof raw.queryVerifierScore !== "number" || !Number.isFinite(raw.queryVerifierScore) || raw.queryVerifierScore < 0 || raw.queryVerifierScore > 1) throw new AppError(502, "Invalid v5 classifier scores");
+    const expected = raw.similarityScore >= hold ? "HOLD" : raw.queryVerifierScore >= warn ? "WARN" : "PASS";
+    if (raw.decision !== expected) throw new AppError(502, "AI decision disagrees with v5 classifier thresholds");
   }
-  const expectedReview = ["WARN", "HOLD"].includes(raw.decision);
+  const expectedReview = raw.decision === "WARN" || raw.decision === "HOLD";
   const expectedDisposition = blocked ? "AUTO_BLOCK" : expectedReview ? "HUMAN_REVIEW" : "ALLOW";
-  if (raw.reviewRequired !== expectedReview || raw.disposition !== expectedDisposition) throw new AppError(502, "Invalid AI review disposition");
-  // The contract has a fixed 0..10000 score scale. Keep original scores and the
-  // evaluated AI policy separately; never silently reinterpret a HOLD as WARN.
+  if (raw.reviewRequired !== undefined && raw.reviewRequired !== expectedReview) throw new AppError(502, "Invalid AI review disposition");
+  if (raw.disposition !== undefined && raw.disposition !== expectedDisposition) throw new AppError(502, "Invalid AI review disposition");
+  // Keep the original AI response and its independent scores for auditability.
+  const evidence = { ...raw, reviewRequired: expectedReview, disposition: expectedDisposition };
   const bounded = (n: number) => Number(new Prisma.Decimal(Math.max(0, n)).toFixed(4));
   const score = blocked ? 1 : bounded(raw.similarityScore);
   const similarTracks = raw.similarTracks.map((item: any) => {
     if (typeof item.trackId !== "string" || !item.trackId || item.trackId.length > 191 || typeof item.score !== "number" || !Number.isFinite(item.score) || item.score < -1 || item.score > 1 || !Array.isArray(item.matchedSegments)) throw new AppError(502, "Invalid external corpus match");
     return { externalTrackId: item.trackId, score: bounded(item.score) };
   });
-  return validateAiResult({ duplicate: blocked, riskScore: score, status: riskStatus(score), modelVersion: raw.modelVersion, similarTracks, evidence: raw });
+  return validateAiResult({ duplicate: blocked, riskScore: score, status: blocked ? "HOLD" : raw.decision, modelVersion: raw.modelVersion, similarTracks, evidence });
 }
 
 export function aiRequiresReview(evidence: Prisma.JsonValue | undefined | null): boolean {
