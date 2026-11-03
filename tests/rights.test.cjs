@@ -57,7 +57,7 @@ test('metadata excludes private fields by default and requires explicit disclosu
   assert.equal(validCid('bafkreigh2akiscaildc6o6p2nhccz3u5c6afgzkgkbb37faqxnxm6woj5m'),true);
 });
 test('EIP-712 readiness blocks mock/missing CIDs; typed data can be signed and verified',async()=>{
-  const {track,options,request,signer}=fixture();assert.ok(registrationPrerequisites(track,options).includes('realMetadataCid'));assert.ok(!registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
+  const {track,options,request,signer}=fixture();assert.ok(registrationPrerequisites(track,options).includes('realMetadataCid'));assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
   assert.equal(typedRegistration(track,request,options).typedData,null);
   track.verifications[0].source='AI';track.metadataCid='bafkreigh2akiscaildc6o6p2nhccz3u5c6afgzkgkbb37faqxnxm6woj5m';
   const document=metadataDocument(track);
@@ -122,6 +122,6 @@ test('AI timeout aborts the provider and never turns a stalled analysis into a s
 test('HOLD evidence permits registration signing but blocks sale',()=>{
   const {track,options}=fixture();
   track.verifications[0].source='AI';track.verifications[0].riskScore=new Prisma.Decimal('.895');track.verifications[0].riskStatus='HOLD';track.verifications[0].evidence={decision:'HOLD',reviewRequired:true};
-  assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
+  assert.ok(!registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
   assert.throws(()=>eligibleTrack(track,false),{statusCode:409});
 });
