@@ -16,9 +16,11 @@ export interface AiVerificationProvider {
   verify(request: AiVerificationRequest, signal?: AbortSignal): Promise<AiVerificationResponse>;
 }
 export function validateAiResult(value: AiVerificationResponse): AiVerificationResponse {
-  let scoreStatus: RiskStatus;
-  try { scoreStatus = riskStatus(value?.riskScore); } catch { throw new AppError(502, "Invalid AI risk score"); }
-  if (!value || typeof value.duplicate !== "boolean" || value.status !== scoreStatus || new Prisma.Decimal(value.riskScore).decimalPlaces() > 4 || typeof value.modelVersion !== "string" || !value.modelVersion.trim() || value.modelVersion.length > 191 || !Array.isArray(value.similarTracks) || value.similarTracks.length > 3) throw new AppError(502, "Invalid AI verification response");
+  if (!value || typeof value.riskScore !== "number" || !Number.isFinite(value.riskScore) || value.riskScore < 0 || value.riskScore > 1) throw new AppError(502, "Invalid AI risk score");
+  const evidence = value.evidence;
+  const aiDecision = evidence && typeof evidence === "object" && !Array.isArray(evidence) && "decision" in evidence ? (evidence as Record<string, unknown>).decision : undefined;
+  const scoreStatus = aiDecision === "BLOCK" ? "HOLD" : aiDecision === "PASS" || aiDecision === "WARN" || aiDecision === "HOLD" ? aiDecision : riskStatus(value.riskScore);
+  if (!value || typeof value.duplicate !== "boolean" || value.status !== scoreStatus || (aiDecision === "BLOCK" && !value.duplicate) || (aiDecision !== undefined && aiDecision !== "BLOCK" && value.duplicate) || new Prisma.Decimal(value.riskScore).decimalPlaces() > 4 || typeof value.modelVersion !== "string" || !value.modelVersion.trim() || value.modelVersion.length > 191 || !Array.isArray(value.similarTracks) || value.similarTracks.length > 3) throw new AppError(502, "Invalid AI verification response");
   const identities = new Set<string>();
   for (const item of value.similarTracks) {
     try { riskStatus(item.score); if (new Prisma.Decimal(item.score).decimalPlaces() > 4) throw new Error(); } catch { throw new AppError(502, "Invalid similarity score"); }
