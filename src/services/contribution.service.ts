@@ -46,6 +46,8 @@ export class ContributionService {
         if (id === track.ownerId) track.owner.walletAddress = users[0]?.walletAddress ?? null;
         for (const item of track.contributions) if (item.userId === id) item.user.walletAddress = users[0]?.walletAddress ?? null;
       }
+      const pending = await tx.contributionInvitation.count({ where: { trackId: id, status: "PENDING" } });
+      if (pending) throw new AppError(409, "All contributor invitations must be accepted or cancelled before finalization");
       const shares = creatorShares(track);
       if (!track.contributionsFinalizedAt) await tx.track.update({ where: { id }, data: { contributionsFinalizedAt: new Date() } });
       return { finalized: true, shares };
