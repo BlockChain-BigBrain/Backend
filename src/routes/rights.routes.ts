@@ -11,6 +11,12 @@ export function createRightsRoutes(controller: RightsController) {
   post("/users/me/wallet/challenge", controller.walletChallenge);
   post("/users/me/wallet", controller.bindWallet);
   const track = "/tracks/:id";
+  read(`${track}/invitations`, controller.invitations, true);
+  post(`${track}/invitations`, controller.invite);
+  read("/users/me/invitations", controller.inbox, true);
+  post("/invitations/:id/accept", controller.acceptInvite);
+  post("/invitations/:id/reject", controller.rejectInvite);
+  router.delete("/invitations/:id", requireAuth, asyncHandler(controller.cancelInvite));
   read(`${track}/contributors`, controller.contributors);
   post(`${track}/contributors`, controller.addContributor);
   router.patch(`${track}/contributors/:contributionId`, requireAuth, asyncHandler(controller.updateContributor));
