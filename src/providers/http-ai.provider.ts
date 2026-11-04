@@ -52,29 +52,41 @@ export class HttpAiVerificationProvider implements AiVerificationProvider {
 }
 
 export function normalizeAiEvidence(raw: any, audioHash: string): AiVerificationResponse {
-  if (!raw || raw.audioHash !== audioHash || !["PASS", "WARN", "HOLD", "BLOCK"].includes(raw.decision) || typeof raw.duplicate?.detected !== "boolean" || typeof raw.reviewRequired !== "boolean" || typeof raw.provisional !== "boolean") throw new AppError(502, "Invalid AI evidence or audio hash mismatch");
-  for (const field of ["modelVersion", "scoreVersion", "corpusVersion", "decisionPolicyVersion", "decisionReason", "disposition"]) if (typeof raw[field] !== "string" || !raw[field] || raw[field].length > 191) throw new AppError(502, "Incomplete AI provenance");
+  const policy = {
+    modelVersion: "laion/clap-htsat-unfused",
+    scoreVersion: "hybrid_query_top3_pairwise_hold-v5",
+    decisionPolicyVersion: "track-ai-balanced-policy-v5-20261102",
+    warn: 0.351229127861893,
+    hold: 0.9471999941293027,
+  } as const;
+  if (!raw || raw.audioHash !== audioHash || !["PASS", "WARN", "HOLD", "BLOCK"].includes(raw.decision) || typeof raw.duplicate?.detected !== "boolean" || raw.provisional !== true) throw new AppError(502, "Invalid AI evidence or audio hash mismatch");
+  for (const field of ["modelVersion", "scoreVersion", "corpusVersion", "decisionPolicyVersion"]) if (typeof raw[field] !== "string" || !raw[field] || raw[field].length > 191) throw new AppError(502, "Incomplete AI provenance");
+  if (raw.modelVersion !== policy.modelVersion || raw.scoreVersion !== policy.scoreVersion || raw.decisionPolicyVersion !== policy.decisionPolicyVersion) throw new AppError(502, "Unsupported AI policy version");
   const { warn, hold } = raw.thresholds ?? {};
-  if (!Number.isFinite(warn) || !Number.isFinite(hold) || warn < 0 || warn >= hold || hold > 1 || !Number.isFinite(raw.processingSeconds) || raw.processingSeconds < 0) throw new AppError(502, "Invalid AI policy evidence");
+  const close = (a: unknown, b: number) => typeof a === "number" && Number.isFinite(a) && Math.abs(a - b) < 1e-12;
+  if (!close(warn, policy.warn) || !close(hold, policy.hold) || !Number.isFinite(raw.processingSeconds) || raw.processingSeconds < 0) throw new AppError(502, "Invalid AI policy evidence");
   const blocked = raw.decision === "BLOCK";
-  if (blocked !== raw.duplicate.detected || (blocked && raw.similarityScore !== null) || !Array.isArray(raw.similarTracks) || raw.similarTracks.length > 3) throw new AppError(502, "Contradictory AI evidence");
-  if (!blocked && (typeof raw.similarityScore !== "number" || raw.similarityScore < -1 || raw.similarityScore > 1)) throw new AppError(502, "Invalid raw similarity score");
+  if (blocked !== raw.duplicate.detected || (blocked && (raw.similarityScore !== null || raw.queryVerifierScore !== null)) || !Array.isArray(raw.similarTracks) || raw.similarTracks.length > 3) throw new AppError(502, "Contradictory AI evidence");
+  if (!blocked && [raw.similarityScore, raw.queryVerifierScore].some((n) => typeof n !== "number" || !Number.isFinite(n) || n < -1 || n > 1)) throw new AppError(502, "Invalid AI verifier score");
   if (!blocked) {
-    const expected = raw.similarityScore >= hold ? "HOLD" : raw.similarityScore >= warn ? "WARN" : "PASS";
+    // WARN is query-level; HOLD is pairwise. They are intentionally different score spaces.
+    const expected = raw.similarityScore >= hold ? "HOLD" : raw.queryVerifierScore >= warn ? "WARN" : "PASS";
     if (raw.decision !== expected) throw new AppError(502, "AI decision disagrees with its thresholds");
   }
   const expectedReview = ["WARN", "HOLD"].includes(raw.decision);
   const expectedDisposition = blocked ? "AUTO_BLOCK" : expectedReview ? "HUMAN_REVIEW" : "ALLOW";
-  if (raw.reviewRequired !== expectedReview || raw.disposition !== expectedDisposition) throw new AppError(502, "Invalid AI review disposition");
-  // The contract has a fixed 0..10000 score scale. Keep original scores and the
-  // evaluated AI policy separately; never silently reinterpret a HOLD as WARN.
+  const evidence = { ...raw, reviewRequired: expectedReview, disposition: expectedDisposition,
+    decisionReason: blocked ? "EXACT_DUPLICATE" : raw.decision === "HOLD" ? "PAIRWISE_TEMPORAL_MATCH" : raw.decision === "WARN" ? "QUERY_LEVEL_MATCH" : "NO_POLICY_THRESHOLD" };
+  // The Contract has a fixed 0..10000 score scale. Preserve raw v5 scores in evidence,
+  // while mapping the AI decision to a canonical risk band for legacy on-chain fields.
   const bounded = (n: number) => Number(new Prisma.Decimal(Math.max(0, n)).toFixed(4));
-  const score = blocked ? 1 : bounded(raw.similarityScore);
+  const score = blocked ? 1 : raw.decision === "PASS" ? Math.min(0.7999, bounded(raw.similarityScore)) : raw.decision === "WARN" ? Math.min(0.8499, Math.max(0.8, bounded(raw.similarityScore))) : Math.max(0.85, bounded(raw.similarityScore));
   const similarTracks = raw.similarTracks.map((item: any) => {
     if (typeof item.trackId !== "string" || !item.trackId || item.trackId.length > 191 || typeof item.score !== "number" || !Number.isFinite(item.score) || item.score < -1 || item.score > 1 || !Array.isArray(item.matchedSegments)) throw new AppError(502, "Invalid external corpus match");
+    for (const segment of item.matchedSegments) for (const field of ["queryStartSec", "queryEndSec", "refStartSec", "refEndSec", "score"]) if (segment[field] !== undefined && (typeof segment[field] !== "number" || !Number.isFinite(segment[field]))) throw new AppError(502, "Invalid matched segment");
     return { externalTrackId: item.trackId, score: bounded(item.score) };
   });
-  return validateAiResult({ duplicate: blocked, riskScore: score, status: riskStatus(score), modelVersion: raw.modelVersion, similarTracks, evidence: raw });
+  return validateAiResult({ duplicate: blocked, riskScore: score, status: riskStatus(score), modelVersion: raw.modelVersion, similarTracks, evidence });
 }
 
 export function aiRequiresReview(evidence: Prisma.JsonValue | undefined | null): boolean {
