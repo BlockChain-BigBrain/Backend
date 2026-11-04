@@ -76,7 +76,7 @@ export function normalizeAiEvidence(raw: any, audioHash: string): AiVerification
     if (typeof item.trackId !== "string" || !item.trackId || item.trackId.length > 191 || typeof item.score !== "number" || !Number.isFinite(item.score) || item.score < -1 || item.score > 1 || !Array.isArray(item.matchedSegments)) throw new AppError(502, "Invalid external corpus match");
     return { externalTrackId: item.trackId, score: bounded(item.score) };
   });
-  return validateAiResult({ duplicate: blocked, riskScore: score, status: blocked ? "HOLD" : raw.decision, modelVersion: raw.modelVersion, similarTracks, evidence });
+  return validateAiResult({ duplicate: blocked, riskScore: score, status: raw.decision, modelVersion: raw.modelVersion, similarTracks, evidence });
 }
 
 export function aiRequiresReview(evidence: Prisma.JsonValue | undefined | null): boolean {

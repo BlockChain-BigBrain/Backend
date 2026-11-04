@@ -133,6 +133,8 @@ test('HOLD evidence permits registration signing but blocks sale',()=>{
   assert.equal(ready.ready,true);
   assert.equal(ready.typedData.value.verificationStatus,2);
   assert.equal(ready.typedData.value.similarityScore,'8950');
-  track.verifications[0].evidence={decision:'BLOCK'};track.verifications[0].duplicate=true;
+  track.verifications[0].evidence={decision:'BLOCK'};track.verifications[0].duplicate=true;track.verifications[0].riskStatus='BLOCK';
   assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
+  assert.throws(()=>eligibleTrack(track,false),{statusCode:409});
+  assert.equal(metadataDocument(track).verification.status,'BLOCK');
 });
