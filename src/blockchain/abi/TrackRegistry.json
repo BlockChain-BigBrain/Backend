@@ -427,6 +427,11 @@
             "type": "uint256"
           },
           {
+            "internalType": "enum TrackRegistry.VerificationStatus",
+            "name": "verificationStatus",
+            "type": "uint8"
+          },
+          {
             "internalType": "string",
             "name": "modelVersion",
             "type": "string"
