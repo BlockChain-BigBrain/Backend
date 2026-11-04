@@ -10,6 +10,7 @@ export type ContractName = typeof names[number];
 const envNames: Record<ContractName, string> = { TrackRegistry: "TRACK_REGISTRY_ADDRESS", LicenseNFT: "LICENSE_NFT_ADDRESS", LicenseMarketplace: "LICENSE_MARKETPLACE_ADDRESS", RevenueSplitter: "REVENUE_SPLITTER_ADDRESS" };
 export class ChainClient implements BlockchainProvider {
   blockedReason?: string;
+  consistencyGuard?: () => Promise<void>;
   readonly configured: boolean;
   readonly provider: JsonRpcProvider;
   readonly chainId: string;
@@ -29,7 +30,7 @@ export class ChainClient implements BlockchainProvider {
     this.provider = new JsonRpcProvider(request, undefined, { cacheTimeout: -1 });
     this.confirmations = Number(process.env.BLOCKCHAIN_CONFIRMATIONS ?? 2);
     const root = __dirname;
-    try { this.manifest = JSON.parse(readFileSync(path.join(root, "deployment.json"), "utf8")); } catch { this.manifest = null; }
+    try { this.manifest = JSON.parse(readFileSync(process.env.BLOCKCHAIN_DEPLOYMENT_FILE || path.join(root, "deployment.json"), "utf8")); } catch { this.manifest = null; }
     for (const name of names) {
       const abi = JSON.parse(readFileSync(path.join(root, "abi", `${name}.json`), "utf8"));
       this.interfaces[name] = new Interface(abi);
@@ -67,6 +68,7 @@ export class ChainClient implements BlockchainProvider {
   async ready() {
     const health = await this.health();
     if (!health.connected) throw new AppError(503, health.error ?? "Blockchain unavailable");
+    await this.consistencyGuard?.();
   }
   tx(name: ContractName, fn: string, args: unknown[], from: string, value = 0n) {
     return { chainId: this.chainId, from: getAddress(from), to: this.addresses[name], data: this.interfaces[name].encodeFunctionData(fn, args), value: value.toString(), valueUnit: "wei" };

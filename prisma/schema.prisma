@@ -477,3 +477,12 @@ model BlockchainCursor {
   blockHash   String @db.VarChar(66)
 }
 
+
+// Durable identity independent of the event cursor. Never contains secrets.
+model BlockchainIdentity {
+  chainId               String @id @db.VarChar(78)
+  genesisHash           String @db.VarChar(66)
+  deploymentFingerprint String @db.VarChar(64)
+  blockNumber           BigInt @db.UnsignedBigInt
+  blockHash             String @db.VarChar(66)
+}

@@ -8,3 +8,5 @@ uploads/
 src/blockchain/deployment.json
 
 .env.services.local
+
+.local-chain-backups/

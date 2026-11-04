@@ -28,6 +28,6 @@ function run(cmd,args,cwd,env=process.env){const result=spawnSync(cmd,args,{cwd,
  // waiting indefinitely for a second block when no later transaction is sent.
  const fs=require('node:fs'),file=path.join(root,'.env.blockchain.local');
  fs.writeFileSync(file,fs.readFileSync(file,'utf8').replace('BLOCKCHAIN_CONFIRMATIONS=2','BLOCKCHAIN_CONFIRMATIONS=1'),{mode:0o600});
- console.log('Local contracts imported. Keep this terminal open. Restart Backend after restarting this node.');
+ console.log('Local contracts imported. Keep this terminal open. Run npm run local:chain:check before restarting Backend. If mismatched, stop Backend and review npm run local:chain:reconcile:dry. No database is reset automatically.');
  await provider.destroy();
 })().catch(error=>{console.error(error.message);process.exitCode=1;stop();});
