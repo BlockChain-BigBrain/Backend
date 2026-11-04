@@ -100,13 +100,13 @@ export class ChainClient implements BlockchainProvider {
     const call = this.interfaces.TrackRegistry.parseTransaction({ data: transaction.data, value: transaction.value });
     if (call?.name !== "registerTrack" || expected.chainId !== this.chainId || expected.contractAddress.toLowerCase() !== this.addresses.TrackRegistry.toLowerCase()) throw new AppError(409, "Wrong registration transaction");
     const r = call.args[0];
-    const value = { audioHash: r.audioHash, metadataCIDHash: keccak256(Buffer.from(r.metadataCID)), registrant: transaction.from, contributorsHash: keccak256((await import("ethers")).AbiCoder.defaultAbiCoder().encode(["address[]", "uint256[]"], [r.contributors, r.shares])), similarityScore: r.similarityScore, modelVersion: r.modelVersion, nonce: r.nonce, deadline: r.deadline };
-    const types = { RegisterTrack: [{name:"audioHash",type:"bytes32"},{name:"metadataCIDHash",type:"bytes32"},{name:"registrant",type:"address"},{name:"contributorsHash",type:"bytes32"},{name:"similarityScore",type:"uint256"},{name:"modelVersion",type:"string"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}] };
-    const digest = TypedDataEncoder.hash({name:"TrackAI_Registry",version:"1",chainId:this.chainId,verifyingContract:this.addresses.TrackRegistry}, types, value);
+    const value = { audioHash: r.audioHash, metadataCIDHash: keccak256(Buffer.from(r.metadataCID)), registrant: transaction.from, contributorsHash: keccak256((await import("ethers")).AbiCoder.defaultAbiCoder().encode(["address[]", "uint256[]"], [r.contributors, r.shares])), similarityScore: r.similarityScore, verificationStatus: r.verificationStatus, modelVersion: r.modelVersion, nonce: r.nonce, deadline: r.deadline };
+    const types = { RegisterTrack: [{name:"audioHash",type:"bytes32"},{name:"metadataCIDHash",type:"bytes32"},{name:"registrant",type:"address"},{name:"contributorsHash",type:"bytes32"},{name:"similarityScore",type:"uint256"},{name:"verificationStatus",type:"uint8"},{name:"modelVersion",type:"string"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}] };
+    const digest = TypedDataEncoder.hash({name:"TrackAI_Registry",version:"2",chainId:this.chainId,verifyingContract:this.addresses.TrackRegistry}, types, value);
     const events = this.events(receipt, "TrackRegistry", "TrackRegistered"), verified = this.events(receipt, "TrackRegistry", "VerificationRecorded");
     if (r.nonce.toString() !== expected.nonce || digest !== expected.payloadDigest || events.length !== 1 || verified.length !== 1) throw new AppError(409, "Registration proof differs from signed request");
     const e = events[0].args, v = verified[0].args;
-    if (e.creator.toLowerCase() !== expected.registrant.toLowerCase() || e.audioHash !== r.audioHash || e.metadataCID !== r.metadataCID || e.trackId !== v.trackId || v.similarityScore !== r.similarityScore || v.modelVersion !== r.modelVersion) throw new AppError(409, "Registration event mismatch");
+    if (e.creator.toLowerCase() !== expected.registrant.toLowerCase() || e.audioHash !== r.audioHash || e.metadataCID !== r.metadataCID || e.trackId !== v.trackId || v.similarityScore !== r.similarityScore || v.modelVersion !== r.modelVersion || v.status !== r.verificationStatus || e.status !== r.verificationStatus) throw new AppError(409, "Registration event mismatch");
     return { ...expected, source: "REAL", confirmed: true, confirmations: await receipt.confirmations(), blockchainTrackId: e.trackId.toString() };
   }
 }
