@@ -92,10 +92,10 @@ test(process.env.SERVICE_AUDIO ? 'REAL AI + IPFS + Hardhat + MySQL service workf
   const registry=new Contract(manifest.TrackRegistry,chain.interfaces.TrackRegistry,creator.account);
   const encoded=chain.interfaces.TrackRegistry.parseTransaction({data:packet.transaction.data});
   const r=encoded.args[0], freshAudio=require('node:crypto').randomBytes(32);
-  const invalid=[`0x${freshAudio.toString('hex')}`,r.metadataCID,[...r.contributors],[...r.shares],r.similarityScore,r.modelVersion,r.nonce+1n,r.deadline];
+  const invalid=[`0x${freshAudio.toString('hex')}`,r.metadataCID,[...r.contributors],[...r.shares],r.similarityScore,r.verificationStatus,r.modelVersion,r.nonce+1n,r.deadline];
   await assert.rejects(registry.registerTrack(invalid,'0x'+'11'.repeat(65)));
-  const expired=[...invalid];expired[6]+=1n;expired[7]=1n;
-  const expiredValue={...packet.typedData.value,audioHash:expired[0],nonce:expired[6],deadline:'1'};
+  const expired=[...invalid];expired[7]+=1n;expired[8]=1n;
+  const expiredValue={...packet.typedData.value,audioHash:expired[0],nonce:expired[7],deadline:'1'};
   const expiredSig=await verifier.signTypedData(packet.typedData.domain,packet.typedData.types,expiredValue);
   await assert.rejects(registry.registerTrack(expired,expiredSig));
   assert.equal((await call('POST',route+'/registration/confirm',creator.token,{txHash:'0x'+'0'.repeat(64)})).status,409);
@@ -108,8 +108,8 @@ test(process.env.SERVICE_AUDIO ? 'REAL AI + IPFS + Hardhat + MySQL service workf
   assert.equal((await db.marketplaceListing.findUniqueOrThrow({where:{id:listing.id}})).status,'ACTIVE');
   const market=new Contract(manifest.LicenseMarketplace,chain.interfaces.LicenseMarketplace,buyer.account);
   await assert.rejects(market.purchaseLicense(chainId,{value:100n}));await assert.rejects(market.purchaseLicense(99999999n,{value:101n}));
-  const held=[...invalid];held[0]='0x'+require('node:crypto').randomBytes(32).toString('hex');held[4]=9000n;held[6]+=3n;
-  const heldValue={...packet.typedData.value,audioHash:held[0],similarityScore:'9000',nonce:held[6]};
+  const held=[...invalid];held[0]='0x'+require('node:crypto').randomBytes(32).toString('hex');held[4]=9000n;held[5]=2n;held[7]+=3n;
+  const heldValue={...packet.typedData.value,audioHash:held[0],similarityScore:'9000',verificationStatus:2,nonce:held[7]};
   const holdReceipt=await(await registry.registerTrack(held,await verifier.signTypedData(packet.typedData.domain,packet.typedData.types,heldValue))).wait();
   const holdId=chain.events(holdReceipt,'TrackRegistry','TrackRegistered')[0].args.trackId;
   await(await new Contract(manifest.LicenseMarketplace,chain.interfaces.LicenseMarketplace,creator.account).setLicensePrice(holdId,101n)).wait();await assert.rejects(market.purchaseLicense(holdId,{value:101n}));
