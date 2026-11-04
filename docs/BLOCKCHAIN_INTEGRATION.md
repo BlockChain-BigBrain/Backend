@@ -2,17 +2,18 @@
 
 실행 방법은 [BLOCKCHAIN_LOCAL_SETUP.md](BLOCKCHAIN_LOCAL_SETUP.md), 변경·검증 보고는 [BLOCKCHAIN_IMPLEMENTATION.md](BLOCKCHAIN_IMPLEMENTATION.md)를 참조한다.
 
-등록 Domain은 `TrackAI_Registry`, version `1`, chainId `31337`, verifyingContract=실제 TrackRegistry 주소다. 타입은 다음과 같고 순서도 고정이다:
+등록 Domain은 `TrackAI_Registry`, version `2`, chainId `31337`, verifyingContract=실제 TrackRegistry 주소다. 타입은 다음과 같고 순서도 고정이다:
 
 ```text
-RegisterTrack(bytes32 audioHash,bytes32 metadataCIDHash,address registrant,bytes32 contributorsHash,uint256 similarityScore,string modelVersion,uint256 nonce,uint256 deadline)
+RegisterTrack(bytes32 audioHash,bytes32 metadataCIDHash,address registrant,bytes32 contributorsHash,uint256 similarityScore,uint8 verificationStatus,string modelVersion,uint256 nonce,uint256 deadline)
 ```
 
 - audioHash: 업로드 SHA256 32bytes.
 - metadataCIDHash: `keccak256(bytes(metadataCID))`, UTF8 문자열.
 - registrant: 창작자의 소유권 확인된 지갑. 실제 registerTrack msg.sender와 일치.
 - contributorsHash: 사용자별 역할 지분을 합산하고 userId 순서로 `keccak256(abi.encode(address[],uint256[]))`. 정수 지분 합계 100, 60%=60.
-- similarityScore: riskScore × 10000. `<8000 PASS`, `<9000 WARN`, 나머지 HOLD.
+- similarityScore: AI v5 similarityScore(riskScore) × 10000. 점수만으로 상태를 재판정하지 않는다.
+- verificationStatus: AI v5 판정을 EIP-712 서명으로 보호하는 uint8 (`PASS=0`, `WARN=1`, `HOLD=2`). `BLOCK`은 서명 불가. HOLD 등록은 가능하지만 구매 및 NFT 발급은 온체인에서 차단한다.
 - modelVersion: string. EIP712이 문자열을 내부 해시한다.
 - nonce: DB unique 랜덤 uint256. 컨트랙트는 registrant/nonce 별 단일 소비.
 - deadline: UTC Unix 초. 실제 채굴 시 계약이 만료를 검증한다.
