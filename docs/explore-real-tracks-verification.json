@@ -1,0 +1,106 @@
+{
+  "createdAt": "2026-11-04T02:31:13.559Z",
+  "signup": 201,
+  "login": 200,
+  "deleted": 1,
+  "deletedRelations": {
+    "contributions": 0,
+    "verifications": 0,
+    "similarityResults": 0,
+    "comparedSimilarityResults": 0,
+    "licenses": 0,
+    "transactions": 0,
+    "marketplaceListings": 0,
+    "metadataSnapshots": 0,
+    "registrationRequests": 0,
+    "purchaseRequests": 0,
+    "invitations": 0
+  },
+  "uploaded": [
+    {
+      "id": 2,
+      "title": "20886885-cateholic-lay-it-out-royalty-free-music-177843",
+      "mimeType": "audio/mpeg",
+      "sha256": "7f75206ec2622f6fd4ced9e2c4535b8e90b84bef65649f6e9716e78cbd38818b",
+      "size": "5060649",
+      "status": 201
+    },
+    {
+      "id": 3,
+      "title": "2frers - EYES ON US ｜ House ｜ NCS - Copyright Free Music",
+      "mimeType": "audio/webm",
+      "sha256": "f9046cd0daa3cc7ec52e45a209bc551614eb59502d9a8ff8f35b5d8d3c3a7796",
+      "size": "2195487",
+      "status": 201
+    },
+    {
+      "id": 4,
+      "title": "2frers - FLIRT LIGHTS ｜ House ｜ NCS - Copyright Free Music",
+      "mimeType": "audio/webm",
+      "sha256": "54f42078e273f1471d41fbc7d2d571453cb46de6bc7315d7a3138070153516d7",
+      "size": "1961025",
+      "status": 201
+    },
+    {
+      "id": 5,
+      "title": "3rd Prototype - I Know ｜ House ｜ NCS - Copyright Free Music",
+      "mimeType": "audio/webm",
+      "sha256": "c8bd2a4f2167c603874b1377d64d8c03f28afce063d9ce62f1b428b9be687e89",
+      "size": "3708447",
+      "status": 201
+    },
+    {
+      "id": 6,
+      "title": "A Stroll - The Grey Room _ Density & Time",
+      "mimeType": "audio/mpeg",
+      "sha256": "8a145ab37bdabc5bc24a2f8059d9e8b05bcabc18ce5cf0062759d7b7a19d7ecc",
+      "size": "7347759",
+      "status": 201
+    }
+  ],
+  "playback": [
+    {
+      "id": 2,
+      "full": 200,
+      "range": 206,
+      "hashMatches": true,
+      "fullDecode": true
+    },
+    {
+      "id": 3,
+      "full": 200,
+      "range": 206,
+      "hashMatches": true,
+      "fullDecode": true
+    },
+    {
+      "id": 4,
+      "full": 200,
+      "range": 206,
+      "hashMatches": true,
+      "fullDecode": true
+    },
+    {
+      "id": 5,
+      "full": 200,
+      "range": 206,
+      "hashMatches": true,
+      "fullDecode": true
+    },
+    {
+      "id": 6,
+      "full": 200,
+      "range": 206,
+      "hashMatches": true,
+      "fullDecode": true
+    }
+  ],
+  "publicList": {
+    "status": 200,
+    "count": 5,
+    "repeatedRead": true
+  },
+  "existingUsersUnchanged": true,
+  "aiCalls": 0,
+  "blockchainCalls": 0
+}

@@ -59,6 +59,15 @@ test('upload stores SHA-256, detected MIME and JSON-safe size without leaking lo
   const mp3File = await upload(dir,mp3(),'audio/mpeg');
   assert.equal((await service.create(1,{title:'MP3'},mp3File)).mimeType,'audio/mpeg');
 });
+test('upload rejects MIME types that contradict the actual bytes and cleans the file', async t => {
+  const {dir, service, repo} = await fixture(t);
+  for (const [bytes, mime] of [[mp3(), 'audio/webm'], [wav(), 'audio/mpeg']]) {
+    const file = await upload(dir, bytes, mime);
+    await assert.rejects(service.create(1, {title:'Mismatched audio'}, file), {statusCode:415});
+    await assert.rejects(fs.stat(file.path), {code:'ENOENT'});
+  }
+  assert.equal(repo.records.size, 0);
+});
 test('every validation and DB failure cleans an uploaded file', async t => {
   const {dir,service,repo,db} = await fixture(t);
   const cases = [ [{title:''},wav(),400], [{title:'a',contributors:'['},wav(),400], [{title:'a'},Buffer.from('fake'),415], [{title:'a'},Buffer.alloc(1001),413], [{title:'a'},Buffer.alloc(0),415] ];

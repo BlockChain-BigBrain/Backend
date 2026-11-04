@@ -44,6 +44,15 @@ export class TrackFiles {
       if (opened.size > this.maxBytes) throw new AppError(413, "Audio file is too large");
       const buffer = await opened.handle.readFile();
       const mimeType = isEbml(buffer) ? await inspectWebm(buffer) : detectAudio(buffer);
+      const declared = file.mimetype.toLowerCase();
+      const aliases: Record<string, string> = {
+        "audio/mp3": "audio/mpeg", "audio/x-wav": "audio/wav",
+        "audio/wave": "audio/wav", "audio/vnd.wave": "audio/wav",
+      };
+      // Octet-stream is used by clients without MIME detection; inspect the bytes regardless.
+      if (declared !== "application/octet-stream" && (aliases[declared] ?? declared) !== mimeType) {
+        throw new AppError(415, "Declared MIME type does not match the audio file format");
+      }
       return { audioPath, mimeType, audioHash: createHash("sha256").update(buffer).digest("hex"), fileSize: BigInt(buffer.length) };
     } finally { await opened.handle.close(); }
   }

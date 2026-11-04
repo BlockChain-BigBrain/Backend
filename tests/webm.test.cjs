@@ -20,7 +20,7 @@ test('WebM validates actual audio, rejects video-only/spoofed content and preser
  await assert.rejects(inspectWebm(bytes.subarray(0,8)),{statusCode:415});
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'webm-test-'));
  try{const filename='sample.audio',p=path.join(dir,filename);await fs.writeFile(p,bytes);
- const actual=await new TrackFiles(dir).inspect({filename,path:p});
+ const actual=await new TrackFiles(dir).inspect({filename,path:p,mimetype:'audio/webm'});
  assert.equal(actual.mimeType,'audio/webm');assert.equal(actual.audioHash,createHash('sha256').update(bytes).digest('hex'));
  assert.deepEqual(await fs.readFile(p),bytes);
  }finally{await fs.rm(dir,{recursive:true,force:true});}
