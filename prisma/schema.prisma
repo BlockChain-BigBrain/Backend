@@ -49,6 +49,7 @@ enum RiskStatus {
   PASS
   WARN
   HOLD
+  BLOCK
 }
 
 enum VerificationSource {
