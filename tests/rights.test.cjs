@@ -17,7 +17,7 @@ function fixture() {
     contributions:[{id:1,userId:1,role:'COMPOSER',percentage:new Prisma.Decimal(40),user:{walletAddress:creator.address}}, {id:2,userId:1,role:'PROMPT',percentage:new Prisma.Decimal(20),user:{walletAddress:creator.address}}, {id:3,userId:2,role:'PRODUCER',percentage:new Prisma.Decimal(40),user:{walletAddress:collaborator.address}}],
     verifications:[{id:1,status:'VERIFIED',source:'MOCK',duplicate:false,riskScore:new Prisma.Decimal('0.72'),riskStatus:'PASS',modelVersion:'fixture-clap-v1'}],
     metadataCid:null,metadataSnapshots:[],registrationRequests:[],registrationStatus:'NOT_REGISTERED',registrationTxHash:null};
-  const options={chainId:'31337',contractAddress:Wallet.createRandom().address,name:'TrackRegistry',version:'1',primaryType:'TrackVerification',fieldOrder:['audioHash','metadataCIDHash','registrant','contributorsHash','similarityScore','modelVersion','nonce','deadline'],signingKey:signer.privateKey,signerAddress:signer.address,ttlSeconds:900,confirmations:2};
+  const options={chainId:'31337',contractAddress:Wallet.createRandom().address,name:'TrackRegistry',version:'1',primaryType:'TrackVerification',fieldOrder:['audioHash','metadataCIDHash','registrant','contributorsHash','similarityScore','verificationStatus','modelVersion','nonce','deadline'],signingKey:signer.privateKey,signerAddress:signer.address,ttlSeconds:900,confirmations:2};
   const request={id:1,nonce:'123',deadline:new Date(Date.now()+600000),chainId:'31337',status:'PENDING'};
   return {track,creator,collaborator,signer,options,request};
 }
@@ -64,6 +64,7 @@ test('EIP-712 readiness blocks mock/missing CIDs; typed data can be signed and v
   track.metadataSnapshots=[{id:1,status:'UPLOADED',metadataCid:track.metadataCid,document,hash:require('node:crypto').createHash('sha256').update(JSON.stringify(document)).digest('hex')}];
   const payload=typedRegistration(track,request,options);assert.equal(payload.ready,true);
   assert.equal(payload.typedData.value.similarityScore,'7200');
+  assert.equal(payload.typedData.value.verificationStatus,0);
   const signature=await signer.signTypedData(payload.typedData.domain,payload.typedData.types,payload.typedData.value);
   assert.equal(verifyTypedData(payload.typedData.domain,payload.typedData.types,payload.typedData.value,signature),signer.address);
   const digest=TypedDataEncoder.hash(payload.typedData.domain,payload.typedData.types,payload.typedData.value);
@@ -124,4 +125,14 @@ test('HOLD evidence permits registration signing but blocks sale',()=>{
   track.verifications[0].source='AI';track.verifications[0].riskScore=new Prisma.Decimal('.895');track.verifications[0].riskStatus='HOLD';track.verifications[0].evidence={decision:'HOLD',reviewRequired:true};
   assert.ok(!registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
   assert.throws(()=>eligibleTrack(track,false),{statusCode:409});
+  track.metadataCid='bafkreigh2akiscaildc6o6p2nhccz3u5c6afgzkgkbb37faqxnxm6woj5m';
+  const document=metadataDocument(track);
+  track.metadataSnapshots=[{id:1,status:'UPLOADED',metadataCid:track.metadataCid,document,hash:require('node:crypto').createHash('sha256').update(JSON.stringify(document)).digest('hex')}];
+  const request={nonce:'987',deadline:new Date(Date.now()+600000)};
+  const ready=typedRegistration(track,request,options);
+  assert.equal(ready.ready,true);
+  assert.equal(ready.typedData.value.verificationStatus,2);
+  assert.equal(ready.typedData.value.similarityScore,'8950');
+  track.verifications[0].evidence={decision:'BLOCK'};track.verifications[0].duplicate=true;
+  assert.ok(registrationPrerequisites(track,options).includes('realEligibleAiVerification'));
 });
