@@ -12,7 +12,7 @@ import { AppError } from "../utils/errors";
 
 const fields = {
   audioHash: "bytes32", metadataCIDHash: "bytes32", registrant: "address", contributorsHash: "bytes32",
-  similarityScore: "uint256", modelVersion: "string", nonce: "uint256", deadline: "uint256",
+  similarityScore: "uint256", verificationStatus: "uint8", modelVersion: "string", nonce: "uint256", deadline: "uint256",
 } as const;
 export interface HashingRules {
   metadataEncoding: "UTF8" | "CID_BYTES";
@@ -31,7 +31,7 @@ export function blockchainOptions(): BlockchainOptions {
   const chainId = process.env.BLOCKCHAIN_CHAIN_ID ?? (network === "amoy" ? "80002" : "31337");
   if (!/^[1-9]\d*$/.test(chainId) || BigInt(chainId) >= 2n ** 256n) throw new Error("Invalid BLOCKCHAIN_CHAIN_ID");
   const order = (process.env.EIP712_FIELD_ORDER ?? Object.keys(fields).join(",")).split(",");
-  if (order.length !== 8 || new Set(order).size !== 8 || order.some(field => !(field in fields))) throw new Error("Invalid EIP712_FIELD_ORDER");
+  if (order.length !== 9 || new Set(order).size !== 9 || order.some(field => !(field in fields))) throw new Error("Invalid EIP712_FIELD_ORDER");
   const ttlSeconds = Number(process.env.REGISTRATION_TTL_SECONDS ?? 900), confirmations = Number(process.env.BLOCKCHAIN_CONFIRMATIONS ?? 2);
   if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 60 || ttlSeconds > 86400 || !Number.isSafeInteger(confirmations) || confirmations < 1) throw new Error("Invalid blockchain expiry/confirmations");
   const primaryType = process.env.EIP712_PRIMARY_TYPE ?? "RegisterTrack";
@@ -45,17 +45,17 @@ export function blockchainOptions(): BlockchainOptions {
     if (Object.keys(types).some(key => !(key in fields)) || Object.keys(hashing).some(key => !(key in defaultHashing))) throw new Error();
     fieldTypes = { ...fieldTypes, ...types }; hashingRules = { ...hashingRules, ...hashing };
     for (const key of ["audioHash", "metadataCIDHash", "registrant", "contributorsHash", "nonce"] as const) if (fieldTypes[key] !== fields[key]) throw new Error();
-    if (!["string", "bytes32"].includes(fieldTypes.modelVersion) || !["uint16", "uint32", "uint64", "uint256"].includes(fieldTypes.similarityScore) || !["uint64", "uint256"].includes(fieldTypes.deadline)) throw new Error();
+    if (fieldTypes.verificationStatus !== "uint8" || !["string", "bytes32"].includes(fieldTypes.modelVersion) || !["uint16", "uint32", "uint64", "uint256"].includes(fieldTypes.similarityScore) || !["uint64", "uint256"].includes(fieldTypes.deadline)) throw new Error();
     if (!["UTF8", "CID_BYTES"].includes(hashingRules.metadataEncoding) || !["ABI_ARRAYS", "ABI_TUPLES"].includes(hashingRules.contributorsEncoding) || ![10000, 100000, 1000000].includes(hashingRules.similarityScale) || ![100, 1000, 10000, 100000, 1000000].includes(hashingRules.percentageScale)) throw new Error();
     if (BigInt(hashingRules.similarityScale) >= 2n ** BigInt(fieldTypes.similarityScore.slice(4))) throw new Error();
   } catch { throw new Error("Invalid EIP712_FIELD_TYPES_JSON or EIP712_HASHING_JSON"); }
   const options: BlockchainOptions = {
     chainId, contractAddress: process.env.TRACK_REGISTRY_ADDRESS || undefined,
-    name: process.env.EIP712_DOMAIN_NAME ?? "TrackAI_Registry", version: process.env.EIP712_DOMAIN_VERSION ?? "1", primaryType,
+    name: process.env.EIP712_DOMAIN_NAME ?? "TrackAI_Registry", version: process.env.EIP712_DOMAIN_VERSION ?? "2", primaryType,
     fieldTypes, hashingRules, fieldOrder: order as Array<keyof typeof fields>, signingKey: process.env.VERIFICATION_SIGNER_PRIVATE_KEY || undefined,
     signerAddress: process.env.VERIFICATION_SIGNER_ADDRESS || undefined, ttlSeconds, confirmations,
   };
-  if (network === "hardhat" && (options.name!=="TrackAI_Registry" || options.version!=="1" || options.primaryType!=="RegisterTrack" || JSON.stringify(options.fieldOrder)!==JSON.stringify(Object.keys(fields)) || Object.entries(fields).some(([key,type])=>fieldTypes[key as keyof typeof fields]!==type) || JSON.stringify(hashingRules)!==JSON.stringify(defaultHashing))) throw new Error("Hardhat EIP-712 settings must match TrackRegistry.sol exactly");
+  if (network === "hardhat" && (options.name!=="TrackAI_Registry" || options.version!=="2" || options.primaryType!=="RegisterTrack" || JSON.stringify(options.fieldOrder)!==JSON.stringify(Object.keys(fields)) || Object.entries(fields).some(([key,type])=>fieldTypes[key as keyof typeof fields]!==type) || JSON.stringify(hashingRules)!==JSON.stringify(defaultHashing))) throw new Error("Hardhat EIP-712 settings must match TrackRegistry.sol exactly");
   if (options.contractAddress) options.contractAddress = wallet(options.contractAddress);
   if (options.signingKey) {
     let signer: Wallet;
@@ -98,7 +98,7 @@ export function typedRegistration(track: RightsTrack, request: RegistrationReque
     primaryType: options.primaryType,
     types: { [options.primaryType]: options.fieldOrder.map(name => ({ name, type: fieldTypes[name] })) },
     value: { audioHash: `0x${track.audioHash}`, metadataCIDHash, registrant: wallet(track.owner.walletAddress), contributorsHash,
-      similarityScore: verification.riskScore!.mul(hashing.similarityScale).toFixed(0), modelVersion: fieldTypes.modelVersion === "bytes32" ? utf8Hash(verification.modelVersion!) : verification.modelVersion!, nonce: request.nonce, deadline: String(Math.floor(request.deadline.getTime() / 1000)) },
+      similarityScore: verification.riskScore!.mul(hashing.similarityScale).toFixed(0), verificationStatus: ({ PASS: 0, WARN: 1, HOLD: 2 } as const)[verification.riskStatus as "PASS" | "WARN" | "HOLD"], modelVersion: fieldTypes.modelVersion === "bytes32" ? utf8Hash(verification.modelVersion!) : verification.modelVersion!, nonce: request.nonce, deadline: String(Math.floor(request.deadline.getTime() / 1000)) },
   } };
 }
 export class BlockchainService {
@@ -106,7 +106,7 @@ export class BlockchainService {
   transaction(track: RightsTrack, packet: any, signature: string) {
     if (!chainClient.configured || !packet.ready) return undefined;
     const shares = creatorShares(track);
-    const r = [packet.typedData.value.audioHash, track.metadataCid, shares.map(s => s.walletAddress), shares.map(s => s.percentage.split(".")[0]), packet.typedData.value.similarityScore, packet.typedData.value.modelVersion, packet.typedData.value.nonce, packet.typedData.value.deadline];
+    const r = [packet.typedData.value.audioHash, track.metadataCid, shares.map(s => s.walletAddress), shares.map(s => s.percentage.split(".")[0]), packet.typedData.value.similarityScore, packet.typedData.value.verificationStatus, packet.typedData.value.modelVersion, packet.typedData.value.nonce, packet.typedData.value.deadline];
     return chainClient.tx("TrackRegistry", "registerTrack", [r, signature], packet.typedData.value.registrant);
   }
   async register(id: number, userId: number) {
