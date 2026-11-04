@@ -55,7 +55,7 @@ import 도구는 명시한 Contract 경로에서 네 ABI와 `deployments/31337.j
 - `BLOCKCHAIN_NETWORK=hardhat`, `BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545`, `BLOCKCHAIN_CHAIN_ID=31337`
 - `TRACK_REGISTRY_ADDRESS`, `LICENSE_NFT_ADDRESS`, `LICENSE_MARKETPLACE_ADDRESS`, `REVENUE_SPLITTER_ADDRESS`
 - `VERIFICATION_SIGNER_ADDRESS`, `VERIFICATION_SIGNER_PRIVATE_KEY`
-- `EIP712_DOMAIN_NAME=TrackAI_Registry`, `EIP712_PRIMARY_TYPE=RegisterTrack`, version 1, 기본 필드 순서/타입/해시
+- `EIP712_DOMAIN_NAME=TrackAI_Registry`, `EIP712_PRIMARY_TYPE=RegisterTrack`, version 2, verificationStatus를 포함한 기본 필드 순서/타입/해시
 - `BLOCKCHAIN_CONFIRMATIONS=2` (automine 테스트는 1 사용), `BLOCKCHAIN_START_BLOCK=0`
 
 Hardhat에서는 Solidity와 다른 EIP712 override를 거부한다. 기본 두 번 확정이면 마지막 거래 후 추가 블록이 필요하다. 테스트 자동화에서 로컬 RPC `evm_mine`으로 한 블록을 추가할 수 있다.

@@ -14,7 +14,7 @@ test(process.env.SERVICE_AUDIO ? 'REAL AI + IPFS + Hardhat + MySQL service workf
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'track-chain-e2e-'));
  const manifest=JSON.parse(readFileSync(process.env.BLOCKCHAIN_DEPLOYMENT_FILE || path.resolve(__dirname,'../src/blockchain/deployment.json'),'utf8'));
  const verifier=HDNodeWallet.fromPhrase('test test test test test test test test test test test junk',undefined,"m/44'/60'/0'/0/1");
- Object.assign(process.env,{DATABASE_URL:process.env.SCHEMA_TEST_DATABASE_URL ? process.env.SCHEMA_TEST_DATABASE_URL.replace(/\/[^/]*$/,`/${database}`) : `mysql://root@localhost/${database}?socket=${encodeURIComponent(socket)}`,UPLOAD_DIR:root,METADATA_DIR:path.join(root,'metadata'),JWT_ACCESS_SECRET:'chain-e2e-access',JWT_REFRESH_SECRET:'chain-e2e-refresh',NODE_ENV:'development',COOKIE_SECURE:'false',FRONTEND_URL:'http://localhost:3000',AI_PROVIDER_MODE:process.env.SERVICE_AUDIO?'http':'unconfigured',STORAGE_PROVIDER_MODE:process.env.SERVICE_AUDIO?'kubo':'unconfigured',PAYMENT_PROVIDER_MODE:'unconfigured',BLOCKCHAIN_NETWORK:'hardhat',BLOCKCHAIN_RPC_URL:process.env.CHAIN_TEST_RPC_URL || 'http://127.0.0.1:8545',BLOCKCHAIN_CHAIN_ID:'31337',BLOCKCHAIN_CONFIRMATIONS:'1',VERIFICATION_SIGNER_ADDRESS:verifier.address,VERIFICATION_SIGNER_PRIVATE_KEY:verifier.privateKey,TRACK_REGISTRY_ADDRESS:manifest.TrackRegistry,LICENSE_NFT_ADDRESS:manifest.LicenseNFT,LICENSE_MARKETPLACE_ADDRESS:manifest.LicenseMarketplace,REVENUE_SPLITTER_ADDRESS:manifest.RevenueSplitter,EIP712_DOMAIN_NAME:'TrackAI_Registry',EIP712_DOMAIN_VERSION:'1',EIP712_PRIMARY_TYPE:'RegisterTrack',EIP712_FIELD_TYPES_JSON:'{}',EIP712_HASHING_JSON:'{}'});
+ Object.assign(process.env,{DATABASE_URL:process.env.SCHEMA_TEST_DATABASE_URL ? process.env.SCHEMA_TEST_DATABASE_URL.replace(/\/[^/]*$/,`/${database}`) : `mysql://root@localhost/${database}?socket=${encodeURIComponent(socket)}`,UPLOAD_DIR:root,METADATA_DIR:path.join(root,'metadata'),JWT_ACCESS_SECRET:'chain-e2e-access',JWT_REFRESH_SECRET:'chain-e2e-refresh',NODE_ENV:'development',COOKIE_SECURE:'false',FRONTEND_URL:'http://localhost:3000',AI_PROVIDER_MODE:process.env.SERVICE_AUDIO?'http':'unconfigured',STORAGE_PROVIDER_MODE:process.env.SERVICE_AUDIO?'kubo':'unconfigured',PAYMENT_PROVIDER_MODE:'unconfigured',BLOCKCHAIN_NETWORK:'hardhat',BLOCKCHAIN_RPC_URL:process.env.CHAIN_TEST_RPC_URL || 'http://127.0.0.1:8545',BLOCKCHAIN_CHAIN_ID:'31337',BLOCKCHAIN_CONFIRMATIONS:'1',VERIFICATION_SIGNER_ADDRESS:verifier.address,VERIFICATION_SIGNER_PRIVATE_KEY:verifier.privateKey,TRACK_REGISTRY_ADDRESS:manifest.TrackRegistry,LICENSE_NFT_ADDRESS:manifest.LicenseNFT,LICENSE_MARKETPLACE_ADDRESS:manifest.LicenseMarketplace,REVENUE_SPLITTER_ADDRESS:manifest.RevenueSplitter,EIP712_DOMAIN_NAME:'TrackAI_Registry',EIP712_DOMAIN_VERSION:'2',EIP712_PRIMARY_TYPE:'RegisterTrack',EIP712_FIELD_TYPES_JSON:'{}',EIP712_HASHING_JSON:'{}'});
  sql(`CREATE DATABASE \`${database}\`;`,false);
  const {prisma:db}=require('../dist/utils/prisma');
  const {chainClient:chain,ChainClient}=require('../dist/blockchain/client');
@@ -92,10 +92,10 @@ test(process.env.SERVICE_AUDIO ? 'REAL AI + IPFS + Hardhat + MySQL service workf
   const registry=new Contract(manifest.TrackRegistry,chain.interfaces.TrackRegistry,creator.account);
   const encoded=chain.interfaces.TrackRegistry.parseTransaction({data:packet.transaction.data});
   const r=encoded.args[0], freshAudio=require('node:crypto').randomBytes(32);
-  const invalid=[`0x${freshAudio.toString('hex')}`,r.metadataCID,[...r.contributors],[...r.shares],r.similarityScore,r.modelVersion,r.nonce+1n,r.deadline];
+  const invalid=[`0x${freshAudio.toString('hex')}`,r.metadataCID,[...r.contributors],[...r.shares],r.similarityScore,r.verificationStatus,r.modelVersion,r.nonce+1n,r.deadline];
   await assert.rejects(registry.registerTrack(invalid,'0x'+'11'.repeat(65)));
-  const expired=[...invalid];expired[6]+=1n;expired[7]=1n;
-  const expiredValue={...packet.typedData.value,audioHash:expired[0],nonce:expired[6],deadline:'1'};
+  const expired=[...invalid];expired[7]+=1n;expired[8]=1n;
+  const expiredValue={...packet.typedData.value,audioHash:expired[0],nonce:expired[7],deadline:'1'};
   const expiredSig=await verifier.signTypedData(packet.typedData.domain,packet.typedData.types,expiredValue);
   await assert.rejects(registry.registerTrack(expired,expiredSig));
   assert.equal((await call('POST',route+'/registration/confirm',creator.token,{txHash:'0x'+'0'.repeat(64)})).status,409);
@@ -108,8 +108,8 @@ test(process.env.SERVICE_AUDIO ? 'REAL AI + IPFS + Hardhat + MySQL service workf
   assert.equal((await db.marketplaceListing.findUniqueOrThrow({where:{id:listing.id}})).status,'ACTIVE');
   const market=new Contract(manifest.LicenseMarketplace,chain.interfaces.LicenseMarketplace,buyer.account);
   await assert.rejects(market.purchaseLicense(chainId,{value:100n}));await assert.rejects(market.purchaseLicense(99999999n,{value:101n}));
-  const held=[...invalid];held[0]='0x'+require('node:crypto').randomBytes(32).toString('hex');held[4]=9000n;held[6]+=3n;
-  const heldValue={...packet.typedData.value,audioHash:held[0],similarityScore:'9000',nonce:held[6]};
+  const held=[...invalid];held[0]='0x'+require('node:crypto').randomBytes(32).toString('hex');held[4]=9000n;held[5]=2n;held[7]+=3n;
+  const heldValue={...packet.typedData.value,audioHash:held[0],similarityScore:'9000',verificationStatus:2,nonce:held[7]};
   const holdReceipt=await(await registry.registerTrack(held,await verifier.signTypedData(packet.typedData.domain,packet.typedData.types,heldValue))).wait();
   const holdId=chain.events(holdReceipt,'TrackRegistry','TrackRegistered')[0].args.trackId;
   await(await new Contract(manifest.LicenseMarketplace,chain.interfaces.LicenseMarketplace,creator.account).setLicensePrice(holdId,101n)).wait();await assert.rejects(market.purchaseLicense(holdId,{value:101n}));

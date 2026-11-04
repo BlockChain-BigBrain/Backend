@@ -159,7 +159,7 @@ test('complete local rights workflow, mock isolation, trusted receipt fixtures a
     assert.equal((await metadata.status(id,creator.id)).snapshot.status,'FAILED');assert.equal((await metadata.status(id,creator.id)).metadataCid,null);
     await metadata.upload(id,creator.id);
     const {BlockchainService}=require('../dist/services/blockchain.service');
-    const signer=Wallet.createRandom();const options={chainId:'31337',contractAddress:Wallet.createRandom().address.toLowerCase(),name:'TrackRegistry',version:'1',primaryType:'TrackVerification',fieldOrder:['audioHash','metadataCIDHash','registrant','contributorsHash','similarityScore','modelVersion','nonce','deadline'],signingKey:signer.privateKey,signerAddress:signer.address.toLowerCase(),ttlSeconds:900,confirmations:2};
+    const signer=Wallet.createRandom();const options={chainId:'31337',contractAddress:Wallet.createRandom().address.toLowerCase(),name:'TrackRegistry',version:'1',primaryType:'TrackVerification',fieldOrder:['audioHash','metadataCIDHash','registrant','contributorsHash','similarityScore','verificationStatus','modelVersion','nonce','deadline'],signingKey:signer.privateKey,signerAddress:signer.address.toLowerCase(),ttlSeconds:900,confirmations:2};
     const chainFixture={configured:true,verifyRegistration:async expected=>({...expected,source:'REAL',confirmed:true,confirmations:2,blockchainTrackId:'77'})};
     const blockchain=new BlockchainService(repo,chainFixture,options);
     let signed=await blockchain.register(id,creator.id);assert.equal(signed.ready,true);assert.equal(signed.sent,false);assert.equal(signed.request.contractAddress,options.contractAddress);assert.equal(signed.request.chainId,options.chainId);
