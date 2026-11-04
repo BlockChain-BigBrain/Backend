@@ -109,8 +109,25 @@ export class ChainSync {
       await this.db.blockchainCursor.upsert({where:{chainId:key},create:{chainId:key,blockNumber:BigInt(to),blockHash:block.hash},update:{blockNumber:BigInt(to),blockHash:block.hash}});
     } finally {this.running=false;}
   }
-  start(interval=3000) {
-    const tick=()=>void this.poll().catch(()=>console.error(JSON.stringify({event:"blockchain_sync_unavailable"})));
-    tick(); const timer=setInterval(tick,interval);timer.unref();return()=>clearInterval(timer);
+  start(interval = 3000) {
+    const tick = () =>
+      void this.poll().catch((error) => {
+        console.error(
+          JSON.stringify({
+            event: "blockchain_sync_unavailable",
+            message:
+              error instanceof Error
+                ? error.message
+                : String(error),
+          })
+        );
+      });
+
+    tick();
+
+    const timer = setInterval(tick, interval);
+    timer.unref();
+
+    return () => clearInterval(timer);
   }
 }
