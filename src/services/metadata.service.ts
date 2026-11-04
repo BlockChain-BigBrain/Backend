@@ -31,7 +31,7 @@ export function metadataDocument(track: RightsTrack, options: unknown = {}) {
 }
 export function validateMetadata(document: ReturnType<typeof metadataDocument>): void {
   if (!document.title || !/^[a-f0-9]{64}$/.test(document.audioHash) || document.schemaVersion !== "1.0" || !Array.isArray(document.contributors) || !document.contributors.length) throw new AppError(400, "Invalid metadata schema");
-  if (!document.verification || !["AI", "MOCK"].includes(document.verification.source) || typeof document.verification.duplicate !== "boolean" || !document.verification.modelVersion || riskStatus(document.verification.riskScore) !== document.verification.status) throw new AppError(400, "Invalid metadata verification");
+  if (!document.verification || !["AI", "MOCK"].includes(document.verification.source) || typeof document.verification.duplicate !== "boolean" || !document.verification.modelVersion || ((() => { const evidence = document.verification.evidence; const decision = evidence && typeof evidence === "object" && !Array.isArray(evidence) && "decision" in evidence ? evidence.decision : undefined; return decision === "BLOCK" ? "HOLD" : decision === "PASS" || decision === "WARN" || decision === "HOLD" ? decision : riskStatus(document.verification.riskScore); })()) !== document.verification.status) throw new AppError(400, "Invalid metadata verification");
   wallet(document.creator);
   let total = new Prisma.Decimal(0);
   for (const item of document.contributors) {
