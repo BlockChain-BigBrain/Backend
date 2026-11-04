@@ -174,3 +174,7 @@ BLOCKCHAIN_ENV_FILE=.env.blockchain.local npm run dev
 ```
 
 먼저 Contract localhost 노드/배포와 대상 DB의 `npm run prisma:deploy`가 필요합니다. 위 overlay는 기존 `.env`의 DB/Auth를 바꾸지 않습니다.
+
+### Local Hardhat restart recovery
+
+For `Finalized cursor reorg/restart detected`, use `npm run local:chain:check` and `npm run local:chain:reconcile:dry`. A development-only, explicitly confirmed reset with a complete SQL backup is documented in [local chain reconciliation](docs/local-chain-reconciliation.md). No chain state is reset by normal startup. Apply the new additive identity migration with `npm run local:migrate` first.

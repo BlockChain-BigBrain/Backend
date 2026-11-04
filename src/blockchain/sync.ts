@@ -5,11 +5,14 @@ import { ChainCommerce } from "./commerce";
 import { BlockchainService, blockchainOptions } from "../services/blockchain.service";
 import { RightsRepository } from "../repositories/rights.repository";
 import { AppError } from "../utils/errors";
+import { guardChainState } from "./identity";
 const watched = new Set(["TrackRegistered","VerificationRecorded","LicensePriceUpdated","LicensePurchased","LicenseMinted","RevenueAllocated","RevenueWithdrawn"]);
 const safe = (v:unknown) => JSON.parse(JSON.stringify(v,(_k,x)=>typeof x==="bigint"?x.toString():x));
 export class ChainSync {
   private running=false;
-  constructor(private db:PrismaClient,private chain:ChainClient,private commerce:ChainCommerce) {}
+  constructor(private db:PrismaClient,private chain:ChainClient,private commerce:ChainCommerce) {
+    chain.consistencyGuard = () => guardChainState(db, chain);
+  }
   async process(hash:string) {
     await this.chain.ready();
     const receipt=await this.chain.provider.getTransactionReceipt(hash);

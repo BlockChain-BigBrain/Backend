@@ -22,7 +22,11 @@
     "local:migrate": "node --env-file=.env.services.local node_modules/prisma/build/index.js migrate deploy",
     "dev:services": "node --env-file=.env.services.local --import tsx src/server.ts",
     "local:check": "npm run build && node scripts/check-services.cjs",
-    "test:service": "npm run build && node scripts/test-service.cjs"
+    "test:service": "npm run build && node scripts/test-service.cjs",
+    "local:chain:check": "node --env-file=.env.services.local --import tsx scripts/local-chain-state.ts check",
+    "local:chain:reconcile:dry": "node --env-file=.env.services.local --import tsx scripts/local-chain-state.ts dry",
+    "local:chain:reconcile": "node --env-file=.env.services.local --import tsx scripts/local-chain-state.ts reconcile",
+    "test:local:chain:reconcile": "npm run build && node scripts/test-local-chain-reconcile.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",
