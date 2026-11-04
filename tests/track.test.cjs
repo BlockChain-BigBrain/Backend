@@ -228,7 +228,13 @@ test('HTTP upload, CRUD, authentication, pagination and byte-range playback', as
   await assert.rejects(fs.stat(path.join(root,filename)),{code:'ENOENT'});
 });
 test('real app removes static upload access and returns 400 for malformed JSON', async t => {
-  const app=require('../dist/app').default;
+  const {config}=require('../dist/config');
+  const saved={aiProviderMode:config.aiProviderMode,aiApiKey:config.aiApiKey,aiUrl:config.aiUrl};
+  let app;
+  try {
+    Object.assign(config,{aiProviderMode:'http',aiApiKey:'',aiUrl:'http://ai-unavailable.invalid'});
+    app=require('../dist/app').default;
+  } finally { Object.assign(config,saved); }
   const base=await serve(t,app); const file=await upload(root);
   assert.equal((await fetch(`${base}/uploads/${file.filename}`)).status,404);
   assert.equal((await fetch(`${base}/health`)).status,200);

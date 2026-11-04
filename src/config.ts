@@ -48,6 +48,8 @@ export const config = {
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
   metadataDir: process.env.METADATA_DIR ?? path.join(process.env.UPLOAD_DIR ?? "uploads", "metadata"),
   aiProviderMode: providerMode("AI_PROVIDER_MODE", "http"),
+  // Canonical AI settings. dev:services preloads .env.services.local;
+  // dotenv/config fills only missing variables from .env (never overrides them).
   aiUrl: process.env.AI_API_URL ?? "http://127.0.0.1:8000",
   aiApiKey: process.env.TRACK_AI_API_KEY ?? "",
   storageProviderMode: providerMode("STORAGE_PROVIDER_MODE", "kubo"),

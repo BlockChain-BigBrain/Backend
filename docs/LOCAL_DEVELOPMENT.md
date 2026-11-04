@@ -79,3 +79,45 @@ FastAPI /verify transport와 파일 전송, Pinata/IPFS upload 및 content 검�
 - `npm audit --json`: **0 vulnerabilities**.
 - MySQL 8.0 대상 별도 실행 및 실제 AI/IPFS/chain/payment/frontend 연동은 하지 않았다.
 - 테스트 DB/파일은 정리했으며 사용자 .env DB는 그대로 유지했다.
+
+## AI HTTP 인증 및 환경변수
+
+Backend의 AI 설정은 다음 세 변수로 통일합니다. 실제 키는 로컬 환경파일에만 넣습니다.
+
+```dotenv
+AI_PROVIDER_MODE=http
+AI_API_URL=https://tonight-pos-past-intent.trycloudflare.com
+TRACK_AI_API_KEY=
+```
+
+`AI_BASE_URL`, `AI_API_TOKEN`은 Backend에서 읽지 않습니다. 일반 실행은 작업 디렉터리의 `.env`를 `dotenv/config`로 읽습니다. `npm run dev:services`는 Node의 `--env-file=.env.services.local`로 먼저 읽습니다. 우선순위는 기존 프로세스 환경변수 → `.env.services.local`(해당 실행 명령 사용 시) → `.env`이며, dotenv는 이미 있는 값을 덮어쓰지 않습니다. 두 환경파일에서 AI URL과 키를 일치시키면 실행 명령에 따른 차이를 방지할 수 있습니다.
+
+HTTP Provider 생성 시 외부 서버에 접속하거나 키를 요구하지 않습니다. 실제 `verify()` 호출에서는 URL과 비어 있지 않은 키를 먼저 검사하며, 설정이 잘못되면 파일을 읽거나 네트워크 요청을 보내기 전에 503 오류로 실패합니다. 업로드(`POST /verify`)와 결과 조회(`GET /verify/{jobId}`) 모두 `Authorization: Bearer <TRACK_AI_API_KEY>`를 보내며, 401/403 응답은 검증 실패로 처리합니다. 이 실패를 PASS 또는 mock 성공으로 바꾸지 않습니다.
+
+일반 `npm test`는 실제 AI 서버나 실제 키를 요구하지 않습니다. HTTP 인증·오류 응답은 로컬 테스트 서버로 검증합니다. MySQL/Hardhat 통합 테스트의 기존 opt-in 조건은 유지합니다. 전체 테스트에서 키가 필요 없음을 확인하려면 `TRACK_AI_API_KEY= npm test`를 실행할 수 있습니다. 이 변경에는 DB 마이그레이션, 초기화, 체인 재배포가 필요하지 않습니다.
+
+### AI 실패 진단과 BLOCK 저장
+
+AI 인증 성공만으로 검증 완료를 판단하지 않습니다. 업로드 202, 작업 SUCCEEDED, 응답 해시·판정 검증, DB의 새 VERIFIED 행 저장을 모두 확인해야 합니다. `VERIFIED`는 분석 완료 상태이며 판정이 BLOCK일 수도 있습니다. BLOCK은 기존 정책에 따라 서명·온체인 등록·구매가 금지됩니다.
+
+DB `Verification.riskStatus`에는 BLOCK이 포함되어야 합니다. schema.prisma/생성된 Prisma Client만 갱신하고 DB에 `20261105120000_preserve_block_verdict`가 적용되지 않으면 실제 BLOCK 응답 저장이 실패합니다. 기존 DB는 반드시 전체 백업과 체크섬 검증 후 대상 DB 및 pending migration을 확인하고 적용합니다. 이 마이그레이션은 BLOCK enum을 추가하고 원본 AI evidence.decision이 BLOCK인 기존 AI HOLD 행만 정정합니다. reset이나 체인 재배포는 필요하지 않습니다.
+
+검증 실패는 새 검증 행에 고정된 안전한 메시지와 다음 코드로 저장됩니다. 기존 이력을 덮어쓰거나 삭제하지 않습니다.
+
+| 코드 | 의미 |
+| --- | --- |
+| AI_NOT_CONFIGURED | 키 또는 URL 미설정/잘못된 설정 |
+| AI_AUTH_FAILED | 업로드 또는 폴링의 401/403 |
+| AI_CONNECTION_FAILED | AI 요청 연결/전송 실패 |
+| AI_TIMEOUT | 전체 검증 또는 HTTP/폴링 제한 시간 초과 |
+| AI_HTTP_ERROR | 401/403 이외 HTTP 오류 |
+| AI_JOB_FAILED | AI 작업 FAILED |
+| AI_INVALID_JSON | JSON 파싱 실패 |
+| AI_INVALID_RESPONSE | 응답 형식/필수 필드/작업 식별 오류 |
+| AI_AUDIO_HASH_MISMATCH | 로컬 파일 또는 결과 해시 불일치 |
+| AI_AUDIO_READ_FAILED | 음원 파일 읽기 실패 또는 크기 제한 |
+| AI_POLICY_FAILED | 점수·판정·중복·검토 정책 검증 실패 |
+| AI_RESULT_SAVE_FAILED | AI 결과 수신 이후 DB 저장 실패 |
+| AI_ANALYSIS_FAILED | 위 분류에 해당하지 않는 검증 실패 |
+
+서버 로그에는 event, trackId, verificationId, code, stage, upstreamStatus만 기록합니다. 원본 예외 메시지, AI 서버 오류 본문, 헤더/토큰, 파일 경로, 음원 원본, 사용자 정보는 기록하지 않습니다. 과거 AI_ANALYSIS_FAILED 행은 당시 원인을 복원할 수 없으므로 새 진단과 실제 스키마/응답을 비교해야 합니다.

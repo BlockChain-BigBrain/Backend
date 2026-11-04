@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { AiVerificationProvider, AiVerificationRequest, validateAiResult } from "../providers/ai.provider";
 import { config } from "../config";
+import { AiProviderError, aiFailure } from "../providers/ai.errors";
 import { own, RightsRepository } from "../repositories/rights.repository";
 import { AppError } from "../utils/errors";
 
@@ -18,9 +19,11 @@ export class VerificationService {
       await tx.marketplaceListing.updateMany({ where: { trackId: id, status: "ACTIVE" }, data: { status: "PREPARING", activeTrackId: null } });
       return { record: await tx.verification.create({ data: { trackId: id, source: this.provider.source, status: "PENDING" } }), audioHash: track.audioHash, audioPath: track.audioPath };
     });
+    let saving = false;
     try {
       const result = validateAiResult(await verificationWithTimeout(this.provider, { trackId: id, audioHash: pending.audioHash, audioPath: pending.audioPath, requestId: `verification-${pending.record.id}` }, this.timeoutMs));
       if (this.provider.source === "UNCONFIGURED") throw new AppError(503, "AI provider is not configured");
+      saving = true;
       await this.repo.locked(id, async (tx, track) => {
         const record = await tx.verification.findUniqueOrThrow({ where: { id: pending.record.id } });
         if (record.status !== "PENDING" || track.audioHash !== pending.audioHash) throw new AppError(409, "Verification input changed");
@@ -34,8 +37,10 @@ export class VerificationService {
         await tx.marketplaceListing.updateMany({ where: { trackId: id, status: "ACTIVE" }, data: { status: "PREPARING", activeTrackId: null } });
       });
     } catch (error) {
+      const failure = saving ? new AiProviderError("AI_RESULT_SAVE_FAILED", "persistence") : aiFailure(error, this.provider.source);
+      console.error(JSON.stringify({ event: "ai_verification_failed", trackId: id, verificationId: pending.record.id, code: failure.code, stage: failure.stage, upstreamStatus: failure.upstreamStatus }));
       await this.repo.db.$transaction(async tx => {
-        await tx.verification.updateMany({ where: { id: pending.record.id, status: "PENDING" }, data: { status: "REJECTED", errorCode: this.provider.source === "UNCONFIGURED" ? "AI_NOT_CONFIGURED" : error instanceof AppError && error.message === "AI verification timed out" ? "AI_TIMEOUT" : "AI_ANALYSIS_FAILED", errorMessage: "Verification provider failed or returned invalid data" } });
+        await tx.verification.updateMany({ where: { id: pending.record.id, status: "PENDING" }, data: { status: "REJECTED", errorCode: failure.code, errorMessage: failure.message } });
         await tx.marketplaceListing.updateMany({ where: { trackId: id, status: "ACTIVE" }, data: { status: "PREPARING", activeTrackId: null } });
       });
     }
@@ -61,7 +66,7 @@ export async function verificationWithTimeout(provider: AiVerificationProvider, 
   try {
     return await Promise.race([
       provider.verify(request, controller.signal),
-      new Promise<never>((_resolve, reject) => { timer = setTimeout(() => { controller.abort(); reject(new AppError(503, "AI verification timed out")); }, timeoutMs); }),
+      new Promise<never>((_resolve, reject) => { timer = setTimeout(() => { controller.abort(); reject(new AiProviderError("AI_TIMEOUT", "poll", 503)); }, timeoutMs); }),
     ]);
   } finally { if (timer) clearTimeout(timer); }
 }
