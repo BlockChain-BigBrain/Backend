@@ -28,7 +28,7 @@ Marketplace :id는 판매 등록 ID다. purchase 응답 id 및 `/licenses/:id/st
 
 기여도는 동일 사용자/역할 unique이며 동일 사용자의 여러 역할을 합산해 사용자별 총 지분을 만든다. 각 비율 (0,100], 최대 2자리, 작성 중 합계 ≤100, 최종 확정 정확히 100이다. 사용자가 없거나 지갑이 없으면 거부하며 지갑을 임의 생성하지 않는다. 확정/등록 이후 지분 변경은 금지한다. 지갑은 EIP-191 challenge signature로 등록하고 확정 후 변경을 막는다.
 
-Verification 작업 상태와 위험 판정을 분리한다. riskScore는 [0,1], 최대 4자리다. PASS <0.80, WARN <0.90, HOLD ≥0.90이다. duplicate는 Chromaprint 중복 판정, riskScore/status는 CLAP 유사도 판정으로 별개다. 정상/실패/Top-3를 저장하고 재검증 이력을 유지한다. 공개 결과에서는 내부 fingerprint/오류 상세를 제외한다. 검증 시작 시 ACTIVE 판매를 PREPARING으로 내리고, 완료/실패 또는 새로운 HOLD/중복을 이전 판매 승인으로 대체하지 않는다.
+Verification 작업 상태와 위험 판정을 분리한다. riskScore는 [0,1], 최대 4자리다. PASS <0.80, WARN <0.85, HOLD ≥0.85이다. duplicate는 Chromaprint 중복 판정, riskScore/status는 CLAP 유사도 판정으로 별개다. 정상/실패/Top-3를 저장하고 재검증 이력을 유지한다. 공개 결과에서는 내부 fingerprint/오류 상세를 제외한다. 검증 시작 시 ACTIVE 판매를 PREPARING으로 내리고, 완료/실패 또는 새로운 HOLD/중복을 이전 판매 승인으로 대체하지 않는다.
 
 Metadata는 지갑/지분·해시·검증 결과를 포함하고 이메일/사용자 비밀은 포함하지 않는다. Prompt/WorkLog는 publish flag와 acceptPublicDisclosure를 명시한 소유자만 추가할 수 있다. 기본은 제외다. SHA-256 내용 해시와 Track별 증가 버전을 기록하며 동일 최신 내용은 재사용한다. 로컬 생성 실패는 FAILED/LOCAL_METADATA_FAILED/localReady=false, 외부 upload 실패는 FAILED/IPFS_UPLOAD_FAILED다. 실패 기록도 생성 요청의 결과로 반환하므로 클라이언트는 HTTP 상태만 보고 성공으로 취급하지 말고 status/localReady를 확인한다.
 
