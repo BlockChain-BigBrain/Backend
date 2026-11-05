@@ -27,9 +27,13 @@ export class HttpAiVerificationProvider implements AiVerificationProvider {
     } finally { await opened.handle.close(); }
     if (createHash("sha256").update(bytes).digest("hex") !== input.audioHash) throw new AppError(409, "Audio content changed");
     const request = async (route: string, init: RequestInit = {}) => {
-      const res = await fetch(this.base + route, { ...init, headers: { "X-Internal-API-Key": this.key }, redirect: "error", signal });
-      if (!res.ok) throw new AppError(502, "AI server rejected the verification request");
+      const res = await fetch(this.base + route, { ...init, headers: { Authorization: `Bearer ${this.key}` }, redirect: "error", signal });
       const raw = await res.text();
+      if (!res.ok) {
+        let detail = raw.slice(0, 240);
+        try { detail = String((JSON.parse(raw) as { detail?: unknown }).detail ?? detail); } catch {}
+        throw new AppError(502, `AI server rejected verification (${res.status}): ${detail}`);
+      }
       if (raw.length > 1024 * 1024) throw new AppError(502, "AI response too large");
       try { return JSON.parse(raw); } catch { throw new AppError(502, "Invalid AI response"); }
     };

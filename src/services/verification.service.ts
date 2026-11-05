@@ -19,7 +19,11 @@ export class VerificationService {
       return { record: await tx.verification.create({ data: { trackId: id, source: this.provider.source, status: "PENDING" } }), audioHash: track.audioHash, audioPath: track.audioPath };
     });
     try {
-      const result = validateAiResult(await verificationWithTimeout(this.provider, { trackId: id, audioHash: pending.audioHash, audioPath: pending.audioPath, requestId: `verification-${pending.record.id}` }, this.timeoutMs));
+      // AI request IDs must be unique for the audio input, not only the DB verification row.
+      // This prevents stale jobs in the AI server's durable queue from causing REQUEST_ID_CONFLICT
+      // after a backend DB reset, retry, or track-id reuse.
+      const requestId = `verification-${id}-${pending.audioHash}`;
+      const result = validateAiResult(await verificationWithTimeout(this.provider, { trackId: id, audioHash: pending.audioHash, audioPath: pending.audioPath, requestId }, this.timeoutMs));
       if (this.provider.source === "UNCONFIGURED") throw new AppError(503, "AI provider is not configured");
       await this.repo.locked(id, async (tx, track) => {
         const record = await tx.verification.findUniqueOrThrow({ where: { id: pending.record.id } });

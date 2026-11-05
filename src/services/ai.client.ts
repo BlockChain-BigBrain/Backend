@@ -49,7 +49,7 @@ export class AiClient implements AiGateway {
   private headers() {
     const key = process.env.TRACK_AI_API_KEY;
     if (!key) throw new Error('AI_NOT_CONFIGURED');
-    return { 'X-Internal-API-Key': key };
+    return { Authorization: `Bearer ${key}` };
   }
   async submit(filePath: string, originalName: string, trackId: number, requestKey: string) {
     const headers = this.headers();
