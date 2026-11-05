@@ -44,7 +44,7 @@ ACTIVE 생성/전환 시 **같은 원자적 쓰기에서 activeTrackId=trackId**
 
 - 금액은 Prisma Decimal로 계산한다. KRW 최소 단위 1, USD 0.01, ETH/MATIC 0.000000000000000001이며 서비스에서 자릿수/반올림을 검증한다. API에 BigInt fileSize를 직접 JSON 직렬화하지 말고 문자열로 변환한다.
 - 지갑은 실제 사용자 입력을 검증·정규화하며 생성하지 않는다. 역할별 기여는 사용자별로 합산하고 확정 시 정확히 100%를 검증한다.
-- riskScore < 0.80 PASS, < 0.90 WARN, 나머지 HOLD다. duplicate와 작업 상태를 구분한다. MOCK은 실제 AI 완료/판매 승인 근거로 사용하지 않는다.
+- riskScore < 0.80 PASS, < 0.85 WARN, 나머지 HOLD다. duplicate와 작업 상태를 구분한다. MOCK은 실제 AI 완료/판매 승인 근거로 사용하지 않는다.
 - SimilarityResult의 verification과 원본 track 일치, 판매자의 소유권, 기여도 확정/등록 후 불변성, 중복 검증/구매/nonce 방지는 후속 서비스의 원자적 트랜잭션으로 구현한다. 현재 DB 확장만으로 이 정책들이 구현되었다고 간주하지 않는다.
 - 실제 CID/txHash/tokenId를 임의 생성하지 않는다. REGISTERED/License COMPLETED/정산 confirmedAt/출금 COMPLETED는 실제 외부 결과 검증 후에만 기록한다.
 - 사용자별 RevenueAllocation unique는 역할이 여러 개인 기여자도 한 번만 정산되도록 한다. confirmedAt이 없는 배분은 예상 수익이며 출금 가능 잔액이 아니다. 출금 준비 상태는 실제 자금 이동을 뜻하지 않는다.

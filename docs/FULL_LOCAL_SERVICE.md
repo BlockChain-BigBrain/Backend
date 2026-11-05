@@ -1,5 +1,7 @@
 # Track-AI 로컬 실제 서비스 실행
 
+> 최신 v5 기준: AI 원시 WARN/HOLD 임계값은 각각 query `0.351229127861893`, pairwise `0.9471999941293027`이고, Contract 정규화 구간은 PASS `<0.80`, WARN `0.80~<0.85`, HOLD `>=0.85`입니다. 두 값은 서로 다른 점수 공간입니다.
+
 현재 구조는 `TrackRegistry → LicenseMarketplace → LicenseNFT / RevenueSplitter`입니다. 등록은 창작 증명을 저장하고, 구매 시 ERC-1155 상업 이용권을 발급합니다. 예전 `AudioLicense.registerAndMint`와 혼용하지 않습니다.
 
 ## 준비

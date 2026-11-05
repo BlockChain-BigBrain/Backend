@@ -12,7 +12,7 @@ RegisterTrack(bytes32 audioHash,bytes32 metadataCIDHash,address registrant,bytes
 - metadataCIDHash: `keccak256(bytes(metadataCID))`, UTF8 문자열.
 - registrant: 창작자의 소유권 확인된 지갑. 실제 registerTrack msg.sender와 일치.
 - contributorsHash: 사용자별 역할 지분을 합산하고 userId 순서로 `keccak256(abi.encode(address[],uint256[]))`. 정수 지분 합계 100, 60%=60.
-- similarityScore: riskScore × 10000. `<8000 PASS`, `<9000 WARN`, 나머지 HOLD.
+- similarityScore: riskScore × 10000. `<8000 PASS`, `<8500 WARN`, 나머지 HOLD.
 - modelVersion: string. EIP712이 문자열을 내부 해시한다.
 - nonce: DB unique 랜덤 uint256. 컨트랙트는 registrant/nonce 별 단일 소비.
 - deadline: UTC Unix 초. 실제 채굴 시 계약이 만료를 검증한다.

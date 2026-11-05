@@ -1,5 +1,7 @@
 # Track-AI 권리/거래 기능
 
+> 최신 Contract 정규화 기준: riskScore `<0.80` PASS, `<0.85` WARN, `>=0.85` HOLD. AI v5 원시 점수와 혼동하지 않습니다.
+
 track-management를 로컬 main에 병합한 뒤 나머지 기능을 main에서 함께 구현했다. 기존 인증/음원 경로와 계층 구조를 유지하며 RightsController/rights.routes/rights.dto, RightsRepository, 기능별 Service, 외부 Provider로 확장한다. Swagger는 모든 신규 API에 입력·권한·응답·오류를 문서화한다.
 
 ## API 목록
